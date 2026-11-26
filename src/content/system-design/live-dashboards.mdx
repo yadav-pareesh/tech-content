@@ -1,0 +1,87 @@
+# System Design & Live Sports Scenarios
+
+<Lead>Product and frontend architecture scenarios for high-traffic, real-time applications like live sports scoreboards, medal tallies, and large athlete directories.</Lead>
+
+## Live Sports Score Dashboard
+
+<QuestionCard question="How would you build a live sports score dashboard and implement live updates without refreshing the page?" difficulty="hard" tags={["system design", "WebSockets", "SSE", "polling", "real-time"]}>
+
+**Architecture Overview:**
+1. **Initial Load (Fast FCP + SEO):** Render the initial scoreboard shell and latest snapshot via **SSR / short-revalidate ISR** in Next.js.
+2. **Real-Time Transport:**
+   - **WebSockets / Socket.IO:** Best for bidirectional, ultra-low-latency updates (live chat, instant score ticks, room subscriptions per match ID).
+   - **Server-Sent Events (SSE):** Lightweight one-way server-to-client stream over HTTP — ideal when the client only *receives* score updates.
+   - **Short Polling / SWR (`refreshInterval`):** Good fallback when WebSockets drop or for less frequent updates (e.g., every 10–15 seconds).
+3. **Granular Re-renders:** Normalize match state by `matchId` (e.g., in Zustand or RTK) and wrap each `<MatchCard />` in `React.memo` so a score update in Match A doesn't re-render Match B–Z.
+
+<CodeBlock language="tsx" code={`// Subscribing to a specific match room with Socket.IO
+useEffect(() => {
+  socket.emit('join_match', matchId);
+
+  const handleScoreUpdate = (update: ScorePayload) => {
+    setMatchScore(update.matchId, update);
+  };
+
+  socket.on('score_update', handleScoreUpdate);
+
+  return () => {
+    socket.off('score_update', handleScoreUpdate);
+    socket.emit('leave_match', matchId);
+  };
+}, [matchId]);`} />
+</QuestionCard>
+
+## Medal Tally & Large Datasets
+
+<QuestionCard question="How would you display a medal tally and handle thousands of athletes and match records efficiently?" difficulty="medium" tags={["virtualization", "pagination", "medal tally", "tables", "performance"]}>
+
+**Medal Tally Display:**
+- Sort server-side (Gold → Silver → Bronze → Total) and highlight the user's state/country row.
+- Use a responsive table on desktop and compact stacked cards on mobile, with sticky headers (`position: sticky`) and clear medal badges.
+- Cache the tally with ISR or React Query (`staleTime: 30_000`) since medal counts update less frequently than live match clocks.
+
+**Thousands of Athletes & Match Records:**
+1. **Server-Side Pagination & Filtering:** Never fetch 10,000 records at once. Fetch 20–50 per page (`?page=1&limit=25`).
+2. **List Virtualization (`@tanstack/react-virtual`):** If displaying a long scrollable list, render only the ~15–20 rows visible in the viewport.
+3. **Memoized Row Components:** Keep row rendering light and avoid inline object/function creation inside loops.
+</QuestionCard>
+
+## Multi-Faceted Filtering
+
+<QuestionCard question="How would you implement filters for sports, states, and competitions?" difficulty="medium" tags={["filters", "URL search params", "debounce", "UX"]}>
+
+1. **Store Filters in URL Search Params (`?sport=athletics&state=meghalaya&status=live`):**
+   - Users can share, bookmark, or refresh filtered views without losing state.
+2. **Debounce Text Search:** Debounce athlete/team name search (300–400ms) while applying dropdown/chip filters immediately.
+3. **Cancel In-Flight Requests:** Use `AbortController` (or React Query's automatic cancellation via query keys `['matches', filters]`) so fast filter changes never show stale data.
+4. **Reset Page on Filter Change:** Always reset `page=1` whenever a filter changes so users don't land on an empty page 5.
+</QuestionCard>
+
+## Handling API Failures & Mobile Smoothness
+
+<QuestionCard question="How would you handle API failures during a live event, and how do you make the website work smoothly on mobile devices?" difficulty="medium" tags={["resilience", "retry", "offline", "mobile", "responsive"]}>
+
+**Handling API Failures During Live Events:**
+- **Graceful Degradation:** Keep showing the **last known good data** (stale cache) with a subtle `"Reconnecting... Last updated 30s ago"` banner instead of wiping the screen with an error page.
+- **Automatic Retry with Exponential Backoff:** Retry failed requests (1s → 2s → 4s) and reconnect WebSockets automatically.
+- **Error Boundaries:** Isolate widget failures so a broken news widget doesn't crash the live scoreboard.
+
+**Making the Website Smooth on Mobile:**
+- **Mobile-First Responsive Layout:** Use Tailwind breakpoints, CSS Grid/Flexbox, and convert wide tables into swipeable or stacked cards on small screens.
+- **Minimize Main-Thread Work:** Reduce JS bundle size (Server Components, code splitting) since mobile CPUs are slower than desktops.
+- **Touch-Friendly UI:** Minimum 44×44px tap targets, avoid hover-only interactions, and optimize images (`WebP`/`AVIF` + `srcset`).
+- **Respect Battery & Network:** Pause or slow down polling when `document.hidden === true` (Page Visibility API).
+</QuestionCard>
+
+## Designing a Scalable React Application
+
+<QuestionCard question="How would you design a scalable React application from scratch?" difficulty="hard" tags={["architecture", "scalability", "feature-based", "clean code"]}>
+
+A scalable frontend architecture enforces clear boundaries so teams can ship features independently without coupling everything together:
+
+1. **Feature-Based Folder Structure:** Group domain logic, hooks, and feature components under `features/<domain>/`, while keeping generic primitives (`Button`, `Dialog`, `Input`) in `components/ui/`.
+2. **Clear API & Data Layer:** Centralize HTTP clients, interceptors, error normalization, and server-state caching (React Query / RTK Query) outside UI components.
+3. **State Separation:** Keep local UI state in `useState`, shared client state in Zustand/Redux, server state in React Query/RTK Query, and shareable filters/pagination in URL search params.
+4. **Performance by Default:** Route-level code splitting (`React.lazy` / Next.js App Router), list virtualization for large datasets, and image/bundle optimization.
+5. **Quality & Reliability:** Strict TypeScript, Error Boundaries, unit/integration tests for critical flows, accessibility (semantic HTML, keyboard navigation), and error monitoring (e.g., Sentry).
+</QuestionCard>

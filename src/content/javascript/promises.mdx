@@ -1,0 +1,199 @@
+# Promises & Async/Await
+
+<Lead>Asynchronous JavaScript is at the heart of modern web development. Understanding Promises, the microtask queue, and async/await patterns is essential for any frontend role.</Lead>
+
+## What is a Promise?
+
+<QuestionCard question="What is a Promise and what are its states?" difficulty="medium" tags={["promise", "async", "states"]}>
+
+A **Promise** is an object representing the eventual completion or failure of an asynchronous operation. It's a placeholder for a value that isn't available yet.
+
+**Three states:**
+1. **Pending** — initial state, neither fulfilled nor rejected
+2. **Fulfilled** — operation completed successfully (has a value)
+3. **Rejected** — operation failed (has a reason/error)
+
+A Promise is **settled** once it's either fulfilled or rejected — it cannot change state again.
+
+<MermaidDiagram chart={`stateDiagram-v2
+  [*] --> Pending
+  Pending --> Fulfilled : resolve(value)
+  Pending --> Rejected : reject(reason)
+  Fulfilled --> [*]
+  Rejected --> [*]`} />
+
+<CodeBlock language="javascript" code={`// Creating a Promise
+const fetchUser = new Promise((resolve, reject) => {
+  // Executor runs synchronously
+  setTimeout(() => {
+    const success = true;
+    if (success) {
+      resolve({ id: 1, name: 'Alice' }); // fulfilled
+    } else {
+      reject(new Error('User not found')); // rejected
+    }
+  }, 1000);
+});
+
+// Consuming a Promise
+fetchUser
+  .then(user => {
+    console.log(user.name); // 'Alice' — runs when fulfilled
+    return user.id;         // return value passed to next .then()
+  })
+  .then(id => console.log('ID:', id)) // chaining
+  .catch(err => console.error(err))   // handles any rejection above
+  .finally(() => console.log('Done')); // always runs`} />
+</QuestionCard>
+
+## async/await
+
+<QuestionCard question="How does async/await work and how does it relate to Promises?" difficulty="medium" tags={["async", "await", "promises", "error handling"]}>
+
+`async/await` is **syntactic sugar** over Promises. `async` functions always return a Promise, and `await` pauses execution until the Promise settles.
+
+<CodeBlock language="javascript" code={`// Promise chain
+function fetchUserData(userId) {
+  return fetch(\`/api/users/\${userId}\`)
+    .then(res => {
+      if (!res.ok) throw new Error('HTTP error ' + res.status);
+      return res.json();
+    })
+    .then(user => fetch(\`/api/posts?userId=\${user.id}\`))
+    .then(res => res.json());
+}
+
+// Equivalent async/await — much more readable
+async function fetchUserData(userId) {
+  const res = await fetch(\`/api/users/\${userId}\`);
+  if (!res.ok) throw new Error('HTTP error ' + res.status);
+  const user = await res.json();
+  
+  const postsRes = await fetch(\`/api/posts?userId=\${user.id}\`);
+  return postsRes.json();
+}
+
+// Error handling with async/await
+async function main() {
+  try {
+    const data = await fetchUserData(1);
+    console.log(data);
+  } catch (err) {
+    console.error('Failed:', err.message);
+  } finally {
+    console.log('Request complete');
+  }
+}
+
+// async function always returns a Promise
+const result = main(); // Promise<void>
+console.log(result instanceof Promise); // true`} />
+
+<InterviewTip>
+When asked about error handling, mention that unawaited async calls can cause unhandled promise rejections. Always `await` or `.catch()` your Promises.
+</InterviewTip>
+</QuestionCard>
+
+## Promise Combinators
+
+<QuestionCard question="What are Promise.all, Promise.allSettled, Promise.race, and Promise.any?" difficulty="hard" tags={["Promise.all", "Promise.race", "Promise.any", "concurrency"]}>
+
+These are four key combinators for handling multiple Promises concurrently.
+
+<CodeBlock language="javascript" code={`const p1 = Promise.resolve(1);
+const p2 = Promise.resolve(2);
+const pFail = Promise.reject(new Error('oops'));
+
+// Promise.all — all must succeed; fails fast on first rejection
+await Promise.all([p1, p2]); // [1, 2]
+await Promise.all([p1, pFail]); // throws Error('oops')
+
+// Promise.allSettled — waits for ALL, never rejects
+const results = await Promise.allSettled([p1, pFail]);
+// [
+//   { status: 'fulfilled', value: 1 },
+//   { status: 'rejected', reason: Error('oops') }
+// ]
+
+// Promise.race — first to settle wins (fulfilled OR rejected)
+const winner = await Promise.race([
+  new Promise(r => setTimeout(() => r('slow'), 1000)),
+  new Promise(r => setTimeout(() => r('fast'), 100)),
+]);
+// 'fast'
+
+// Promise.any — first to FULFILL wins (ignores rejections)
+// Throws AggregateError only if ALL reject
+const first = await Promise.any([
+  Promise.reject(new Error('1')),
+  Promise.resolve('success'),
+  Promise.resolve('also success'),
+]);
+// 'success'`} />
+
+| Method | Resolves when | Rejects when |
+|--------|-------------|-------------|
+| `Promise.all` | All fulfill | Any rejects |
+| `Promise.allSettled` | All settle (never rejects) | Never |
+| `Promise.race` | First settles (any state) | First rejects |
+| `Promise.any` | First fulfills | All reject |
+
+<KeyPoint>
+Use `Promise.all` when you need **all results** and want to fail fast. Use `Promise.allSettled` when you need to know the outcome of **every** request. Use `Promise.race` for **timeouts**.
+</KeyPoint>
+</QuestionCard>
+
+## Async Patterns
+
+<QuestionCard question="How do you run async operations in parallel vs sequential?" difficulty="hard" tags={["parallel", "sequential", "async", "performance"]}>
+
+<CodeBlock language="javascript" code={`// Sequential — each waits for the previous (slow)
+async function sequential() {
+  const user = await fetchUser(1);    // wait...
+  const posts = await fetchPosts(1);  // then wait...
+  const comments = await fetchComments(1); // then wait...
+  // Total time = sum of all requests
+}
+
+// Parallel — start all at once (fast)
+async function parallel() {
+  const [user, posts, comments] = await Promise.all([
+    fetchUser(1),     // ┐
+    fetchPosts(1),    // ├─ all start simultaneously
+    fetchComments(1), // ┘
+  ]);
+  // Total time = longest single request
+}
+
+// Parallel with error handling per item
+async function parallelSafe() {
+  const results = await Promise.allSettled([
+    fetchUser(1),
+    fetchPosts(1),
+  ]);
+  
+  const user = results[0].status === 'fulfilled' 
+    ? results[0].value 
+    : null;
+}
+
+// Avoid sequential in loops — common mistake
+// BAD: sequential
+for (const id of [1, 2, 3]) {
+  await processItem(id); // waits for each
+}
+
+// GOOD: parallel (but be careful with rate limits)
+await Promise.all([1, 2, 3].map(id => processItem(id)));
+
+// BETTER: batch control
+async function batchProcess(items, batchSize = 3) {
+  const results = [];
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
+    const batchResults = await Promise.all(batch.map(processItem));
+    results.push(...batchResults);
+  }
+  return results;
+}`} />
+</QuestionCard>

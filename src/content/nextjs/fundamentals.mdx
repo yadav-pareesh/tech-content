@@ -1,0 +1,142 @@
+# Next.js Fundamentals & Rendering
+
+<Lead>Next.js is the production React framework. Understanding its rendering strategies (SSR, SSG, ISR), Server vs. Client Components, and hydration is critical for modern frontend interviews.</Lead>
+
+<Callout type="important" title="High-Priority Topic">
+Next.js rendering strategies and Server vs. Client Components are among the most frequently tested topics for React/Next.js roles.
+</Callout>
+
+## Next.js vs React
+
+<QuestionCard question="What is Next.js, and why do we use it instead of React alone? How do they differ?" difficulty="easy" tags={["Next.js", "React", "framework", "SEO"]}>
+
+**React** is a UI **library** focused solely on building component-based interfaces in the browser (CSR by default).  
+**Next.js** is a full-stack React **framework** that provides routing, server rendering, data fetching, bundling, and optimizations out of the box.
+
+| Feature | React (Vite / SPA) | Next.js |
+|---------|-------------------|---------|
+| Type | UI Library | Full-stack React Framework |
+| Rendering | Client-Side Rendering (CSR) | SSR, SSG, ISR, Streaming, CSR |
+| SEO | Poor out of the box (empty HTML initially) | Excellent (pre-rendered HTML) |
+| Routing | Requires `react-router-dom` | Built-in file-based App Router |
+| Backend / APIs | Separate backend needed | Built-in Route Handlers & Server Actions |
+| Optimization | Manual setup | Built-in `next/image`, `next/font`, code splitting |
+
+<InterviewTip>
+Summarize it clearly: "React gives us components and state; Next.js gives us the production architecture around React — SSR/SSG for SEO and fast first paint, file-based routing, and server-side capabilities."
+</InterviewTip>
+</QuestionCard>
+
+## Rendering Strategies: SSR, SSG, and ISR
+
+<QuestionCard question="Explain Server-Side Rendering (SSR), Static Site Generation (SSG), and Incremental Static Regeneration (ISR)." difficulty="hard" tags={["SSR", "SSG", "ISR", "rendering", "SEO"]}>
+
+<MermaidDiagram chart={`graph TD
+  A["Rendering Strategy"] --> B["SSG\nBuilt once at build time"]
+  A --> C["ISR\nStatic + background revalidation"]
+  A --> D["SSR\nRendered on every request"]
+  A --> E["CSR\nRendered in browser via JS"]`} />
+
+1. **Static Site Generation (SSG):**
+   - HTML is generated **once at build time** and served from a CDN.
+   - **Pros:** Fastest possible TTFB, cheapest to scale, great SEO.
+   - **Cons:** Data can become stale until the next build.
+   - **Best for:** Blogs, marketing pages, documentation.
+
+2. **Server-Side Rendering (SSR):**
+   - HTML is generated **on the server for every incoming request**.
+   - **Pros:** Always fresh data, personalized per user/request, great SEO.
+   - **Cons:** Slower TTFB than SSG, higher server load.
+   - **Best for:** Authenticated dashboards, personalized feeds, real-time pricing.
+
+3. **Incremental Static Regeneration (ISR):**
+   - Serves a cached static page (like SSG), but **revalidates and regenerates it in the background** after a specified time (`revalidate`) or on-demand.
+   - **Pros:** Combines SSG speed with fresh data without full rebuilds.
+   - **Best for:** E-commerce product pages, news articles, sports standings.
+
+<CodeBlock language="tsx" code={`// Next.js App Router caching & rendering behavior
+
+// 1. SSG (default for static routes without dynamic APIs)
+const res = await fetch('https://api.example.com/posts', {
+  cache: 'force-cache', // cached at build time
+});
+
+// 2. ISR (revalidate every 60 seconds)
+const res = await fetch('https://api.example.com/standings', {
+  next: { revalidate: 60 },
+});
+
+// 3. SSR (dynamic — fresh on every request)
+const res = await fetch('https://api.example.com/user/profile', {
+  cache: 'no-store',
+});`} />
+</QuestionCard>
+
+## Server Components vs Client Components
+
+<QuestionCard question="What are React Server Components (RSC) and Client Components in Next.js?" difficulty="hard" tags={["Server Components", "Client Components", "use client", "RSC"]}>
+
+In the Next.js App Router, **all components are Server Components by default**.
+
+- **Server Components:**
+  - Execute **only on the server**. Their JavaScript is **never sent to the browser**, reducing bundle size.
+  - Can directly query databases, read filesystem, or use secret API keys safely.
+  - **Cannot** use React hooks (`useState`, `useEffect`), browser APIs (`window`, `localStorage`), or event handlers (`onClick`).
+
+- **Client Components (`'use client'`):**
+  - Marked with `'use client'` at the top of the file.
+  - Pre-rendered on the server (initial HTML) and **hydrated** in the browser so they become interactive.
+  - **Can** use state, effects, browser APIs, and event listeners.
+
+<CodeBlock language="tsx" code={`// app/products/page.tsx — Server Component (default)
+import { AddToCartButton } from './AddToCartButton';
+
+export default async function ProductsPage() {
+  // Runs on the server — zero client JS for this component!
+  const products = await db.product.findMany();
+
+  return (
+    <div>
+      {products.map(p => (
+        <div key={p.id}>
+          <h2>{p.name}</h2>
+          {/* Interactive leaf component */}
+          <AddToCartButton productId={p.id} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// app/products/AddToCartButton.tsx — Client Component
+'use client';
+import { useState } from 'react';
+
+export function AddToCartButton({ productId }: { productId: string }) {
+  const [added, setAdded] = useState(false);
+  return (
+    <button onClick={() => setAdded(true)}>
+      {added ? 'Added!' : 'Add to Cart'}
+    </button>
+  );
+}`} />
+
+<KeyPoint>
+Push `'use client'` **as far down the component tree as possible** (to interactive leaf components like buttons, modals, and forms) so the rest of the page stays zero-bundle Server Components.
+</KeyPoint>
+</QuestionCard>
+
+## Hydration
+
+<QuestionCard question="What is hydration in Next.js / React?" difficulty="medium" tags={["hydration", "SSR", "interactivity"]}>
+
+**Hydration** is the process where React on the client **attaches event listeners and state** to the static HTML that was already rendered by the server.
+
+1. Server sends complete HTML → browser displays content immediately (fast First Contentful Paint).
+2. Browser downloads the JS bundle.
+3. React runs in the browser, matches the existing DOM nodes without recreating them, and attaches event handlers (`onClick`, `onChange`). The page is now interactive.
+
+<CommonMistake>
+**Hydration Mismatch Error:** Happens when the HTML rendered on the server differs from the first render on the client (e.g., using `Date.now()`, `Math.random()`, or reading `window.innerWidth` directly during render). Fix it by running browser-only logic inside `useEffect`.
+</CommonMistake>
+</QuestionCard>

@@ -1,0 +1,215 @@
+# Closures & Scope
+
+<Lead>Closures are one of the most frequently tested JavaScript concepts. Understand them deeply and you'll unlock powerful patterns used throughout modern JavaScript.</Lead>
+
+<Callout type="important" title="Must Know">
+Closures appear in nearly every senior JavaScript interview. They power React hooks, module patterns, memoization, and event handlers.
+</Callout>
+
+## What is a Closure?
+
+<QuestionCard question="What is a closure? Give a practical example." difficulty="medium" tags={["closure", "scope", "functions"]}>
+
+A **closure** is a function that **remembers the variables from its outer scope** even after that outer function has finished executing. It's the combination of a function and the lexical environment in which it was declared.
+
+<CodeBlock language="javascript" code={`// Basic closure
+function makeCounter() {
+  let count = 0;  // 'count' lives in makeCounter's scope
+
+  return function() {
+    count++;        // inner function closes over 'count'
+    return count;
+  };
+}
+
+const counter = makeCounter();
+console.log(counter()); // 1
+console.log(counter()); // 2
+console.log(counter()); // 3
+
+// 'count' is inaccessible from outside
+// console.log(count); // ReferenceError
+
+// Each call to makeCounter() creates a new closure
+const counter2 = makeCounter();
+console.log(counter2()); // 1 — independent state`} />
+
+<MermaidDiagram chart={`graph LR
+  A["makeCounter() scope\ncount = 0"] -->|"closes over"| B["returned function\n() => ++count"]
+  B -->|"reads/writes"| A
+  C["counter variable"] -->|"references"| B`} />
+
+<InterviewTip>
+When explaining closures, always mention: (1) the outer function's variables survive beyond its execution, and (2) each closure has its own independent copy of those variables.
+</InterviewTip>
+</QuestionCard>
+
+## Common Closure Pitfall
+
+<QuestionCard question="What is the classic loop closure bug and how do you fix it?" difficulty="medium" tags={["closure", "loop", "var", "let", "IIFE"]}>
+
+This is one of the most common interview questions about closures.
+
+<CodeBlock language="javascript" code={`// THE BUG — using var in a loop
+for (var i = 0; i < 3; i++) {
+  setTimeout(function() {
+    console.log(i); // logs: 3, 3, 3 ❌
+  }, 100);
+}
+// 'var i' is function-scoped, shared across all callbacks
+// By the time setTimeout fires, i === 3
+
+// FIX 1: Use 'let' (block-scoped — creates new binding per iteration)
+for (let i = 0; i < 3; i++) {
+  setTimeout(function() {
+    console.log(i); // logs: 0, 1, 2 ✓
+  }, 100);
+}
+
+// FIX 2: IIFE to capture the value
+for (var i = 0; i < 3; i++) {
+  (function(j) {
+    setTimeout(function() {
+      console.log(j); // logs: 0, 1, 2 ✓
+    }, 100);
+  })(i);
+}
+
+// FIX 3: Use .forEach or .map
+[0, 1, 2].forEach(function(i) {
+  setTimeout(function() {
+    console.log(i); // logs: 0, 1, 2 ✓
+  }, 100);
+});`} />
+
+<CommonMistake>
+Don't confuse *closing over a variable* (reference) with *closing over a value* (snapshot). Closures capture **references** to variables, not their values at creation time. This is exactly why the `var` loop bug occurs.
+</CommonMistake>
+</QuestionCard>
+
+## Practical Closure Patterns
+
+<QuestionCard question="What are common use cases for closures in real applications?" difficulty="medium" tags={["closure", "patterns", "module", "memoization"]}>
+
+**1. Data Privacy / Module Pattern**
+
+<CodeBlock language="javascript" code={`// Private state using closure
+function createBankAccount(initialBalance) {
+  let balance = initialBalance; // private variable
+
+  return {
+    deposit(amount) {
+      if (amount <= 0) throw new Error('Invalid amount');
+      balance += amount;
+      return balance;
+    },
+    withdraw(amount) {
+      if (amount > balance) throw new Error('Insufficient funds');
+      balance -= amount;
+      return balance;
+    },
+    getBalance() {
+      return balance; // read-only access
+    },
+  };
+}
+
+const account = createBankAccount(100);
+account.deposit(50);  // 150
+account.withdraw(30); // 120
+account.getBalance();  // 120
+// account.balance — undefined, it's private!`} />
+
+**2. Function Factories**
+
+<CodeBlock language="javascript" code={`// Creating specialized functions
+function multiply(factor) {
+  return (number) => number * factor;
+}
+
+const double = multiply(2);
+const triple = multiply(3);
+
+double(5); // 10
+triple(5); // 15
+
+// Practical: event handlers with context
+function attachClickHandler(element, message) {
+  element.addEventListener('click', function() {
+    alert(message); // 'message' is closed over
+  });
+}`} />
+
+**3. Memoization**
+
+<CodeBlock language="javascript" code={`function memoize(fn) {
+  const cache = new Map(); // closed over
+
+  return function(...args) {
+    const key = JSON.stringify(args);
+    if (cache.has(key)) {
+      console.log('Cache hit!');
+      return cache.get(key);
+    }
+    const result = fn.apply(this, args);
+    cache.set(key, result);
+    return result;
+  };
+}
+
+const expensiveCalc = memoize((n) => {
+  // simulate heavy computation
+  return n * n;
+});
+
+expensiveCalc(10); // computes: 100
+expensiveCalc(10); // Cache hit! 100`} />
+</QuestionCard>
+
+## Lexical Scope
+
+<QuestionCard question="What is lexical scope and how does it differ from dynamic scope?" difficulty="hard" tags={["scope", "lexical", "this"]}>
+
+**Lexical scope** (also called static scope) means that scope is determined by **where functions are written** in the source code, not where they are called.
+
+<CodeBlock language="javascript" code={`// Lexical scope demo
+const x = 'global';
+
+function outer() {
+  const x = 'outer';
+
+  function inner() {
+    // 'inner' looks up the scope chain where it was DEFINED
+    console.log(x); // 'outer' — not 'global', not wherever inner() is called from
+  }
+
+  return inner;
+}
+
+const fn = outer();
+fn(); // 'outer' — lexical scope wins
+
+// Arrow functions capture 'this' lexically too
+class Timer {
+  constructor() {
+    this.seconds = 0;
+  }
+
+  start() {
+    // Arrow function: 'this' is lexically bound to Timer instance
+    setInterval(() => {
+      this.seconds++;
+      console.log(this.seconds); // ✓ works correctly
+    }, 1000);
+
+    // Regular function: 'this' would be undefined or window
+    // setInterval(function() {
+    //   this.seconds++; // ✗ TypeError
+    // }, 1000);
+  }
+}`} />
+
+<KeyPoint>
+JavaScript uses **lexical scoping**. The scope chain is built at the time the function is **defined**, not when it's executed. This is what makes closures possible.
+</KeyPoint>
+</QuestionCard>

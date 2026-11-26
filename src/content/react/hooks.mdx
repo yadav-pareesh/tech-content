@@ -1,0 +1,302 @@
+# React Hooks In Depth
+
+<Lead>Hooks transformed React development. A deep understanding of hook internals, rules, and common patterns is essential for senior React interviews.</Lead>
+
+## useState
+
+<QuestionCard question="Explain useState and the functional update pattern" difficulty="easy" tags={["useState", "state", "functional update"]}>
+
+<CodeBlock language="tsx" code={`// Basic useState
+const [count, setCount] = useState(0);
+
+// Functional update — use when new state depends on previous state
+// BAD (may use stale state in async contexts):
+setCount(count + 1);
+setCount(count + 1); // still uses old 'count' — only increments once!
+
+// GOOD (always uses latest state):
+setCount(prev => prev + 1);
+setCount(prev => prev + 1); // increments twice correctly
+
+// Lazy initialization — for expensive initial state computation
+const [state, setState] = useState(() => {
+  // This function runs only once on mount
+  return computeExpensiveInitialState();
+  // NOT: useState(computeExpensiveInitialState()) — runs every render!
+});
+
+// Object state — spread to preserve other fields
+const [form, setForm] = useState({ name: '', email: '' });
+setForm(prev => ({ ...prev, name: 'Alice' }));`} />
+
+<InterviewTip>
+When updating state based on the current state, **always** use the functional update form `setState(prev => ...)`. This is critical in closures, event handlers, and anywhere the state might be stale.
+</InterviewTip>
+</QuestionCard>
+
+## useEffect
+
+<QuestionCard question="How does useEffect work? Explain the dependency array." difficulty="medium" tags={["useEffect", "side effects", "cleanup", "dependencies"]}>
+
+<CodeBlock language="tsx" code={`// 1. Run after every render (no dependency array)
+useEffect(() => {
+  document.title = 'Updated!';
+});
+
+// 2. Run once on mount (empty dependency array)
+useEffect(() => {
+  const subscription = api.subscribe(handler);
+  
+  // Cleanup — runs before unmount and before next effect
+  return () => {
+    subscription.unsubscribe();
+  };
+}, []); // ← empty array = run once
+
+// 3. Run when specific values change
+useEffect(() => {
+  if (!userId) return;
+  
+  let cancelled = false;
+  
+  async function loadUser() {
+    const user = await fetchUser(userId);
+    if (!cancelled) setUser(user); // avoid state update after unmount
+  }
+  
+  loadUser();
+  
+  return () => { cancelled = true; }; // cleanup race conditions
+}, [userId]); // ← re-run when userId changes
+
+// Common mistakes:
+// ❌ Putting objects/functions in dependencies (new reference every render)
+// ❌ Using async directly in useEffect
+// ✅ Define async function inside the effect and call it
+// ✅ Include all reactive values in the dependency array`} />
+
+<MermaidDiagram chart={`sequenceDiagram
+  participant R as React
+  participant E as useEffect
+  participant C as Cleanup
+  R->>E: Component mounts → effect runs
+  R->>C: Component updates → cleanup previous effect
+  C->>E: New effect runs
+  R->>C: Component unmounts → cleanup runs`} />
+</QuestionCard>
+
+## useCallback and useMemo
+
+<QuestionCard question="When and why do you use useCallback and useMemo?" difficulty="medium" tags={["useCallback", "useMemo", "memoization", "performance"]}>
+
+Both hooks memoize values across renders, but for different things:
+- `useMemo` — memoizes a **computed value**
+- `useCallback` — memoizes a **function reference**
+
+<CodeBlock language="tsx" code={`// useMemo — cache expensive computations
+function ProductList({ products, filter }: Props) {
+  // Recomputes only when products or filter changes
+  const filteredProducts = useMemo(
+    () => products.filter(p => p.category === filter),
+    [products, filter]
+  );
+
+  return <ul>{filteredProducts.map(p => <li key={p.id}>{p.name}</li>)}</ul>;
+}
+
+// useCallback — stable function reference for child components
+function Parent() {
+  const [count, setCount] = useState(0);
+  const [text, setText] = useState('');
+
+  // Without useCallback: new function reference on every render
+  // → ChildComponent re-renders even when count changes (not text)
+  const handleSubmit = useCallback((value: string) => {
+    console.log('Submitting:', value, count);
+    // Note: include 'count' in deps if used inside
+  }, [count]);
+
+  return (
+    <>
+      <input value={text} onChange={e => setText(e.target.value)} />
+      <ChildComponent onSubmit={handleSubmit} /> {/* memoized */}
+      <button onClick={() => setCount(c => c + 1)}>+</button>
+    </>
+  );
+}
+
+const ChildComponent = React.memo(({ onSubmit }: { onSubmit: (v: string) => void }) => {
+  // Only re-renders when onSubmit reference changes
+  return <button onClick={() => onSubmit('data')}>Submit</button>;
+});`} />
+
+<Callout type="warning" title="Don't over-optimize">
+`useMemo` and `useCallback` add overhead (memory + comparison). Only use them when: (1) the computation is demonstrably expensive, (2) you're passing functions to memoized child components, or (3) a value is a dependency of other hooks.
+</Callout>
+</QuestionCard>
+
+## useRef
+
+<QuestionCard question="What are the two main use cases for useRef?" difficulty="medium" tags={["useRef", "DOM", "mutable ref", "imperative"]}>
+
+<CodeBlock language="tsx" code={`// USE CASE 1: Access DOM elements imperatively
+function TextInput() {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const focusInput = () => {
+    inputRef.current?.focus(); // direct DOM access
+  };
+
+  return (
+    <>
+      <input ref={inputRef} type="text" />
+      <button onClick={focusInput}>Focus</button>
+    </>
+  );
+}
+
+// USE CASE 2: Store mutable values that don't trigger re-render
+function Timer() {
+  const [running, setRunning] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const start = () => {
+    setRunning(true);
+    intervalRef.current = setInterval(() => {
+      console.log('tick');
+    }, 1000);
+  };
+
+  const stop = () => {
+    setRunning(false);
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  };
+
+  // KEY: changing intervalRef.current does NOT cause a re-render
+  // If you used useState for the interval ID, every assignment would re-render!
+
+  return <button onClick={running ? stop : start}>{running ? 'Stop' : 'Start'}</button>;
+}
+
+// USE CASE 3: Track previous values
+function usePrevious<T>(value: T): T | undefined {
+  const prevRef = useRef<T>();
+  useEffect(() => {
+    prevRef.current = value;
+  }); // no dependency array — runs after every render
+  return prevRef.current; // returns the value from the previous render
+}`} />
+</QuestionCard>
+
+## Custom Hooks
+
+<QuestionCard question="How do you create a custom hook? What are the rules of hooks?" difficulty="medium" tags={["custom hooks", "rules of hooks", "composition"]}>
+
+Custom hooks are JavaScript functions that start with `use` and can call other hooks. They let you extract and reuse stateful logic between components.
+
+<CodeBlock language="tsx" code={`// Custom hook: useWindowSize
+function useWindowSize() {
+  const [size, setSize] = useState({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  });
+
+  useEffect(() => {
+    const handler = () => setSize({
+      width: window.innerWidth,
+      height: window.innerHeight,
+    });
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+
+  return size;
+}
+
+// Custom hook: useFetch
+function useFetch<T>(url: string) {
+  const [data, setData] = useState<T | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+
+    fetch(url)
+      .then(r => r.json())
+      .then(d => { if (!cancelled) { setData(d); setLoading(false); } })
+      .catch(e => { if (!cancelled) { setError(e); setLoading(false); } });
+
+    return () => { cancelled = true; };
+  }, [url]);
+
+  return { data, loading, error };
+}
+
+// Usage
+function App() {
+  const { width } = useWindowSize();
+  const { data, loading } = useFetch<User[]>('/api/users');
+  // ...
+}`} />
+
+**Rules of Hooks:**
+1. **Only call hooks at the top level** — no conditions, no loops, no nested functions
+2. **Only call hooks from React functions** — components or custom hooks
+
+<KeyPoint>
+React relies on the **order of hook calls** to associate state with the correct hook on each render. Breaking the rules causes hooks to associate with the wrong state.
+</KeyPoint>
+</QuestionCard>
+
+## Effect Pitfalls & Strict Mode
+
+<QuestionCard question="Why shouldn't useEffect itself be async, and what happens with incorrect dependencies?" difficulty="medium" tags={["useEffect", "async", "dependencies", "race conditions"]}>
+
+**Why `useEffect` cannot be `async` directly:**  
+An effect callback is expected to return either `undefined` or a **synchronous cleanup function** (`() => void`). An `async` function always returns a `Promise`, which violates React's cleanup contract. Instead, define an `async` function *inside* the effect and invoke it while returning a synchronous cleanup function.
+
+<CodeBlock language="tsx" code={`// ❌ Incorrect — returns a Promise instead of a cleanup function
+useEffect(async () => {
+  const data = await fetchUser(userId);
+  setUser(data);
+}, [userId]);
+
+// ✅ Correct — async function inside the effect + synchronous cleanup
+useEffect(() => {
+  const controller = new AbortController();
+
+  async function load() {
+    try {
+      const res = await fetch(\`/api/users/\${userId}\`, { signal: controller.signal });
+      setUser(await res.json());
+    } catch (err: unknown) {
+      if ((err as Error).name !== 'AbortError') console.error(err);
+    }
+  }
+
+  load();
+  return () => controller.abort();
+}, [userId]);`} />
+
+**Consequences of incorrect dependencies:**
+- **Missing dependencies:** Effects read **stale closure values** or miss re-synchronizing when props/state change.
+- **Unstable references in dependencies (inline objects/functions):** Cause **infinite re-render loops** or repeated API calls on every render.
+</QuestionCard>
+
+<QuestionCard question="Why might an API appear to run twice on mount in development?" difficulty="medium" tags={["Strict Mode", "useEffect", "idempotency", "debugging"]}>
+
+In development, **React Strict Mode** (`<React.StrictMode>`) intentionally mounts, unmounts, and remounts components to surface unsafe side effects and missing cleanups.
+
+- **Wrong fix:** Adding a `useRef` flag just to suppress the second call.
+- **Right fix:** Make effects **idempotent** and implement proper cleanup (such as aborting the in-flight `fetch` with `AbortController` or closing subscriptions in the cleanup function). Production builds do not double-invoke effects.
+</QuestionCard>
+
+<QuestionCard question="Does useMemo guarantee the cached value forever?" difficulty="hard" tags={["useMemo", "memoization", "internals"]}>
+
+**No.** `useMemo` is strictly a **performance optimization**, not a semantic guarantee or persistent cache. React may discard memoized values in future updates (for example, to free memory for offscreen components). Your code must always remain functionally correct even if React recalculates the value.
+</QuestionCard>

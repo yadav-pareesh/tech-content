@@ -1,0 +1,304 @@
+# React Fundamentals
+
+<Lead>React is the most widely used UI library. These foundational concepts appear in virtually every React interview, from junior to senior levels.</Lead>
+
+## JSX and Virtual DOM
+
+<QuestionCard question="What is JSX and how does it work under the hood?" difficulty="easy" tags={["JSX", "virtual DOM", "React.createElement"]}>
+
+JSX is a **syntax extension** for JavaScript that looks like HTML. Babel transforms it into `React.createElement()` calls.
+
+<CodeBlock language="tsx" code={`// JSX (what you write)
+const element = (
+  <div className="greeting">
+    <h1>Hello, {name}!</h1>
+  </div>
+);
+
+// Transpiles to (what React sees)
+const element = React.createElement(
+  'div',
+  { className: 'greeting' },
+  React.createElement('h1', null, 'Hello, ', name, '!')
+);
+
+// React 17+ new JSX transform — no need to import React
+// (Vite and Create React App handle this automatically)`} />
+
+**The Virtual DOM:**
+React maintains a virtual representation of the DOM in memory. When state changes:
+
+<MermaidDiagram chart={`graph LR
+  A["State Change"] --> B["Re-render Virtual DOM"]
+  B --> C["Diff new vs old VDOM\n(Reconciliation)"]
+  C --> D["Compute minimal\nDOM updates"]
+  D --> E["Commit changes\nto real DOM"]`} />
+
+<InterviewTip>
+Interviewers often ask "why is the Virtual DOM faster?" — the real answer is *not* that the Virtual DOM is inherently faster, but that it **batches** DOM updates and applies only the minimum changes needed. Direct DOM manipulation can be faster for single updates.
+</InterviewTip>
+</QuestionCard>
+
+## Component Types
+
+<QuestionCard question="What is the difference between functional and class components?" difficulty="easy" tags={["functional component", "class component", "hooks"]}>
+
+<CodeBlock language="tsx" code={`// Class Component (older style)
+class Counter extends React.Component {
+  state = { count: 0 };
+
+  handleClick = () => {
+    this.setState(prev => ({ count: prev.count + 1 }));
+  };
+
+  componentDidMount() {
+    document.title = \`Count: \${this.state.count}\`;
+  }
+
+  componentDidUpdate() {
+    document.title = \`Count: \${this.state.count}\`;
+  }
+
+  render() {
+    return (
+      <button onClick={this.handleClick}>
+        Count: {this.state.count}
+      </button>
+    );
+  }
+}
+
+// Functional Component (modern — preferred)
+function Counter() {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    document.title = \`Count: \${count}\`;
+  }, [count]);
+
+  return (
+    <button onClick={() => setCount(c => c + 1)}>
+      Count: {count}
+    </button>
+  );
+}`} />
+
+| Aspect | Class | Functional |
+|--------|-------|------------|
+| Syntax | Verbose | Concise |
+| State | `this.state` | `useState` |
+| Lifecycle | `componentDidMount` etc | `useEffect` |
+| `this` binding | Needed | Not needed |
+| Performance | Slightly slower | Faster (simpler) |
+| Reuse logic | HOC, render props | Custom hooks |
+</QuestionCard>
+
+## Props and State
+
+<QuestionCard question="What is the difference between props and state? When do components re-render?" difficulty="medium" tags={["props", "state", "re-render"]}>
+
+**Props:** Immutable data passed from parent to child. A component cannot modify its own props.
+
+**State:** Mutable internal data managed by the component. When state changes, the component re-renders.
+
+<CodeBlock language="tsx" code={`// Props — passed from parent
+function Greeting({ name, age }: { name: string; age: number }) {
+  // Cannot modify name or age here
+  return <h1>Hello {name}, you are {age}!</h1>;
+}
+
+// State — internal, mutable
+function SearchBar() {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<string[]>([]);
+
+  const handleSearch = async (q: string) => {
+    setQuery(q);                    // triggers re-render
+    const data = await search(q);
+    setResults(data);               // triggers another re-render
+  };
+
+  return (
+    <input
+      value={query}
+      onChange={e => handleSearch(e.target.value)}
+    />
+  );
+}
+
+// When does a component re-render?
+// 1. Its own state changes (useState, useReducer)
+// 2. Its parent re-renders (and passes new props)
+// 3. A context value it consumes changes
+// 4. forceUpdate() is called (class components)
+
+// Prevent unnecessary re-renders
+const MemoizedChild = React.memo(ChildComponent);`} />
+
+<Callout type="note" title="State Batching">
+React 18+ automatically batches state updates in async events, timeouts, and native event handlers — not just React event handlers. Multiple `setState` calls in one event result in a single re-render.
+</Callout>
+</QuestionCard>
+
+## Reconciliation and Keys
+
+<QuestionCard question="Why are keys important in React lists?" difficulty="medium" tags={["keys", "reconciliation", "lists", "performance"]}>
+
+React uses **keys** to identify which list items have changed, been added, or removed. Without keys, React has to re-render the entire list on each update.
+
+<CodeBlock language="tsx" code={`// BAD — using index as key (causes bugs with reordering/filtering)
+{items.map((item, index) => (
+  <Item key={index} {...item} />
+))}
+
+// GOOD — use stable, unique IDs
+{items.map(item => (
+  <Item key={item.id} {...item} />
+))}
+
+// Why index keys cause bugs:
+// Initial: [A(key=0), B(key=1), C(key=2)]
+// After removing A: [B(key=0), C(key=1)]
+// React thinks: B was updated at key=0, C was updated at key=1
+// It won't unmount the old key=0 component — just updates its content
+// This causes stale state in uncontrolled components (inputs, etc.)
+
+// Keys must be:
+// - Unique among siblings (not globally unique)
+// - Stable across renders (not random, not based on render order)
+// - From your data, not the render index`} />
+
+<CommonMistake>
+Never use `Math.random()` as a key — it generates a new key on every render, forcing React to unmount and remount every list item, destroying their state and triggering wasteful animations.
+</CommonMistake>
+</QuestionCard>
+
+## Prop Drilling and Context API
+
+<QuestionCard question="What is prop drilling and how does React Context API solve it?" difficulty="medium" tags={["prop drilling", "Context API", "state sharing"]}>
+
+**Prop drilling** happens when you pass data through multiple intermediate components that don't need the data themselves, just to reach a deeply nested child.
+
+**React Context API** lets you share values (theme, auth user, locale) across the component tree without passing props manually at every level.
+
+<CodeBlock language="tsx" code={`// Creating Context
+interface ThemeContextType {
+  theme: 'light' | 'dark';
+  toggleTheme: () => void;
+}
+
+const ThemeContext = createContext<ThemeContextType | null>(null);
+
+// Provider component
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const toggleTheme = () => setTheme(t => (t === 'light' ? 'dark' : 'light'));
+
+  return (
+    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+      {children}
+    </ThemeContext.Provider>
+  );
+}
+
+// Custom hook for safe consumption
+export function useTheme() {
+  const ctx = useContext(ThemeContext);
+  if (!ctx) throw new Error('useTheme must be used inside ThemeProvider');
+  return ctx;
+}
+
+// Any deeply nested child can consume directly
+function ThemeButton() {
+  const { theme, toggleTheme } = useTheme();
+  return <button onClick={toggleTheme}>Current: {theme}</button>;
+}`} />
+
+<CommonMistake>
+Putting frequently changing state (like keystrokes or high-frequency timers) into a global Context causes **every consumer** to re-render on every change. Memoize the `value` object with `useMemo` or split contexts by update frequency.
+</CommonMistake>
+</QuestionCard>
+
+## Controlled vs Uncontrolled Components
+
+<QuestionCard question="What is the difference between controlled and uncontrolled components?" difficulty="easy" tags={["forms", "controlled", "uncontrolled", "useRef"]}>
+
+- **Controlled component:** React state is the single source of truth. The input's `value` is driven by `useState` and updated via `onChange`.
+- **Uncontrolled component:** The DOM itself holds the input's state. You read the value when needed using a `ref` (`useRef`).
+
+<CodeBlock language="tsx" code={`// Controlled — React owns the state
+function ControlledInput() {
+  const [email, setEmail] = useState('');
+
+  return (
+    <input
+      type="email"
+      value={email}
+      onChange={e => setEmail(e.target.value)}
+    />
+  );
+}
+
+// Uncontrolled — DOM owns the state
+function UncontrolledInput() {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    console.log(inputRef.current?.value);
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input type="email" ref={inputRef} defaultValue="" />
+      <button type="submit">Submit</button>
+    </form>
+  );
+}`} />
+
+| Feature | Controlled | Uncontrolled |
+|---------|-----------|--------------|
+| Source of truth | React state | DOM |
+| Instant validation | Easy (on every keystroke) | Harder (on submit) |
+| Conditional disabling | Easy | Manual |
+| File inputs (`<input type="file">`) | Not supported | Required |
+</QuestionCard>
+
+## Error Handling in React
+
+<QuestionCard question="How do you handle errors in React? Explain Error Boundaries." difficulty="medium" tags={["error boundaries", "error handling", "componentDidCatch"]}>
+
+JavaScript errors inside React components can crash the entire UI if uncaught. **Error Boundaries** catch rendering, lifecycle, and constructor errors in their child component tree and display a fallback UI.
+
+<CodeBlock language="tsx" code={`// Error Boundaries must be Class Components (or use react-error-boundary)
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode; fallback: React.ReactNode },
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true }; // update state so next render shows fallback
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error('Caught by ErrorBoundary:', error, info.componentStack);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback;
+    }
+    return this.props.children;
+  }
+}
+
+// Usage
+<ErrorBoundary fallback={<p>Something went wrong. Please refresh.</p>}>
+  <DashboardWidgets />
+</ErrorBoundary>`} />
+
+<Callout type="warning" title="What Error Boundaries Do NOT Catch">
+Error Boundaries do **not** catch errors inside: event handlers (use `try/catch`), asynchronous code (`setTimeout`, `fetch` promises), Server-Side Rendering, or errors thrown inside the Error Boundary itself.
+</Callout>
+</QuestionCard>

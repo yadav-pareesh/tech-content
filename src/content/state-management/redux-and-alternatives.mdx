@@ -1,0 +1,122 @@
+# State Management: Redux, Context & Alternatives
+
+<Lead>Managing global client state predictably is a key frontend skill. Know how Redux Toolkit works, when Context API is enough, and when lightweight tools like Zustand shine.</Lead>
+
+## Redux Core Concepts
+
+<QuestionCard question="What is Redux? Explain Store, Action, Reducer, and Middleware." difficulty="medium" tags={["Redux", "store", "action", "reducer", "middleware"]}>
+
+**Redux** is a predictable state container based on a **single unidirectional data flow**.
+
+<MermaidDiagram chart={`graph LR
+  A["UI Event"] -->|dispatch| B["Action"]
+  B --> C["Middleware\n(Thunk / Logger)"]
+  C --> D["Reducer\n(Pure Function)"]
+  D --> E["Store\n(Single Source of Truth)"]
+  E -->|subscribe| A`} />
+
+- **Store:** The single centralized object holding the entire application state.
+- **Action:** A plain JS object describing *what happened*, with a `type` and optional `payload` (e.g., `{ type: 'cart/addItem', payload: item }`).
+- **Reducer:** A **pure function** `(state, action) => newState` that computes the next state without mutating the previous state.
+- **Middleware:** Sits between `dispatch(action)` and the reducer. Used for async logic, logging, crash reporting, or analytics (e.g., Redux Thunk).
+</QuestionCard>
+
+## Why Redux Toolkit (RTK)?
+
+<QuestionCard question="Why do we need Redux Toolkit instead of plain Redux?" difficulty="medium" tags={["Redux Toolkit", "RTK", "createSlice", "Immer"]}>
+
+Legacy Redux required heavy boilerplate (action type constants, action creators, manual immutable spread updates, separate store setup). **Redux Toolkit (RTK)** is the official standard way to write Redux:
+- `configureStore()` sets up the store with Redux DevTools and Thunk middleware automatically.
+- `createSlice()` generates action creators and action types automatically from reducers.
+- Uses **Immer** under the hood, allowing you to write "mutating" syntax (`state.items.push(...)`) that safely produces immutable updates.
+
+<CodeBlock language="tsx" code={`import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+
+interface CartState {
+  items: { id: string; qty: number }[];
+}
+
+const cartSlice = createSlice({
+  name: 'cart',
+  initialState: { items: [] } as CartState,
+  reducers: {
+    addItem(state, action: PayloadAction<{ id: string }>) {
+      // Looks like mutation, but Immer makes it immutable!
+      const existing = state.items.find(i => i.id === action.payload.id);
+      if (existing) existing.qty += 1;
+      else state.items.push({ id: action.payload.id, qty: 1 });
+    },
+    clearCart(state) {
+      state.items = [];
+    },
+  },
+});
+
+export const { addItem, clearCart } = cartSlice.actions;
+export default cartSlice.reducer;`} />
+</QuestionCard>
+
+## Redux Thunk & RTK Query
+
+<QuestionCard question="What are Redux Thunk and RTK Query?" difficulty="medium" tags={["Redux Thunk", "RTK Query", "async", "caching"]}>
+
+- **Redux Thunk:** Middleware that lets you dispatch **functions** (instead of plain objects) to handle async side effects like API calls, giving you access to `dispatch` and `getState`. In RTK, `createAsyncThunk` standardizes `pending`, `fulfilled`, and `rejected` action lifecycles.
+- **RTK Query:** A powerful data-fetching and caching tool built into Redux Toolkit. It eliminates manually writing thunks, loading flags, and cache invalidation logic — similar to TanStack Query (React Query).
+
+<CodeBlock language="ts" code={`import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+
+export const matchesApi = createApi({
+  reducerPath: 'matchesApi',
+  baseQuery: fetchBaseQuery({ baseUrl: '/api' }),
+  tagTypes: ['Match'],
+  endpoints: (builder) => ({
+    getMatches: builder.query<Match[], void>({
+      query: () => '/matches',
+      providesTags: ['Match'],
+    }),
+  }),
+});
+
+export const { useGetMatchesQuery } = matchesApi;`} />
+</QuestionCard>
+
+## Redux vs Context API vs Zustand
+
+<QuestionCard question="What is the difference between Redux, Context API, and Zustand? When would you use Zustand instead of Redux?" difficulty="medium" tags={["Redux", "Context API", "Zustand", "comparison"]}>
+
+| Feature | Context API | Redux Toolkit | Zustand |
+|---------|------------|---------------|---------|
+| Purpose | Dependency injection / low-frequency state | Large-scale predictable global state | Lightweight, minimal global state |
+| Boilerplate | Low | Medium (much less with RTK) | Very low |
+| Re-render control | Poor (all consumers re-render) | Granular via selectors (`useSelector`) | Granular via selectors |
+| DevTools & Middleware | None built-in | Excellent (time-travel, RTK Query) | Built-in middleware support |
+| Bundle size | 0 KB (built-in) | ~11 KB+ | ~1 KB |
+
+**When to use Zustand instead of Redux:**
+- Small-to-medium apps where RTK slices feel like overkill.
+- You want selector-based re-render optimization without wrapping the app in `<Provider>`.
+- You need fast, simple stores for UI state (modals, filters, cart, theme).
+
+<CodeBlock language="tsx" code={`import { create } from 'zustand';
+
+interface FilterStore {
+  sport: string;
+  setSport: (sport: string) => void;
+}
+
+const useFilterStore = create<FilterStore>((set) => ({
+  sport: 'all',
+  setSport: (sport) => set({ sport }),
+}));
+
+// Only re-renders when 'sport' changes!
+function SportFilter() {
+  const sport = useFilterStore(state => state.sport);
+  const setSport = useFilterStore(state => state.setSport);
+  return <select value={sport} onChange={e => setSport(e.target.value)} />;
+}`} />
+
+<InterviewTip>
+When asked *"How have you managed global state in your own projects?"*, explain **separation of concerns**: server state (API data, caching) with React Query / RTK Query, URL state (filters, pagination) in search params, local UI state with `useState`, and shared client state with Context or Zustand/Redux.
+</InterviewTip>
+</QuestionCard>

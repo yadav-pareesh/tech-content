@@ -1,0 +1,197 @@
+# React Performance
+
+<Lead>Writing performant React applications requires understanding when and why components re-render, and knowing which optimization tools to apply — and when not to.</Lead>
+
+## React.memo
+
+<QuestionCard question="When should you use React.memo?" difficulty="medium" tags={["React.memo", "memoization", "re-renders"]}>
+
+`React.memo` is a higher-order component that prevents a component from re-rendering if its props haven't changed (using shallow comparison).
+
+<CodeBlock language="tsx" code={`// Without memo — re-renders whenever Parent re-renders
+function ExpensiveChild({ data, onAction }: Props) {
+  return <HeavyChart data={data} onAction={onAction} />;
+}
+
+// With memo — only re-renders if props change
+const ExpensiveChild = React.memo(function ExpensiveChild({ data, onAction }: Props) {
+  return <HeavyChart data={data} onAction={onAction} />;
+});
+
+// Custom comparison function (use sparingly)
+const ExpensiveChild = React.memo(
+  ({ data, onAction }: Props) => <HeavyChart data={data} onAction={onAction} />,
+  (prevProps, nextProps) => {
+    // Return true to SKIP re-render (props are equal)
+    return prevProps.data.id === nextProps.data.id;
+  }
+);
+
+// IMPORTANT: memo only works if props references are stable!
+function Parent() {
+  const [count, setCount] = useState(0);
+
+  // ❌ New object reference every render — memo won't help
+  const config = { color: 'blue' };
+  const handleClick = () => console.log('clicked');
+
+  // ✅ Stable references — memo works correctly
+  const config = useMemo(() => ({ color: 'blue' }), []);
+  const handleClick = useCallback(() => console.log('clicked'), []);
+
+  return <ExpensiveChild config={config} onAction={handleClick} />;
+}`} />
+
+<Callout type="tip" title="Measure First">
+Before adding `React.memo`, use React DevTools Profiler to confirm that component re-renders are actually causing performance issues. Premature optimization adds complexity without benefit.
+</Callout>
+</QuestionCard>
+
+## Code Splitting
+
+<QuestionCard question="How do you implement code splitting in React?" difficulty="medium" tags={["code splitting", "lazy", "Suspense", "bundle size"]}>
+
+Code splitting lets you split your bundle into chunks that are loaded on demand, reducing the initial load time.
+
+<CodeBlock language="tsx" code={`import React, { lazy, Suspense } from 'react';
+
+// Dynamic import — Vite/webpack creates a separate chunk
+const HeavyDashboard = lazy(() => import('./HeavyDashboard'));
+const ReportPage = lazy(() => import('./ReportPage'));
+
+// Fallback shows while the chunk loads
+function App() {
+  return (
+    <Suspense fallback={<LoadingSpinner />}>
+      <HeavyDashboard />
+    </Suspense>
+  );
+}
+
+// Route-based splitting (most impactful)
+const router = createBrowserRouter([
+  {
+    path: '/dashboard',
+    element: (
+      <Suspense fallback={<PageSkeleton />}>
+        <HeavyDashboard />
+      </Suspense>
+    ),
+  },
+]);
+
+// Named exports need re-export
+// If your module exports: export function MyComponent() {}
+const MyComponent = lazy(() =>
+  import('./MyModule').then(m => ({ default: m.MyComponent }))
+);`} />
+</QuestionCard>
+
+## List Virtualization
+
+<QuestionCard question="What is list virtualization and when should you use it?" difficulty="hard" tags={["virtualization", "large lists", "performance"]}>
+
+Virtualization renders only the **visible items** in a list, keeping the DOM small regardless of total list size.
+
+<CodeBlock language="tsx" code={`// Without virtualization: 10,000 DOM nodes
+function SlowList({ items }: { items: Item[] }) {
+  return (
+    <ul>
+      {items.map(item => <li key={item.id}>{item.name}</li>)}
+    </ul>
+  );
+}
+
+// With virtualization: ~20 DOM nodes regardless of list size
+// Using @tanstack/react-virtual
+import { useVirtualizer } from '@tanstack/react-virtual';
+
+function FastList({ items }: { items: Item[] }) {
+  const parentRef = useRef<HTMLDivElement>(null);
+
+  const virtualizer = useVirtualizer({
+    count: items.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 48, // estimated row height
+  });
+
+  return (
+    <div ref={parentRef} style={{ height: '500px', overflow: 'auto' }}>
+      <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
+        {virtualizer.getVirtualItems().map(virtualItem => (
+          <div
+            key={virtualItem.index}
+            style={{
+              position: 'absolute',
+              top: virtualItem.start,
+              left: 0,
+              width: '100%',
+              height: virtualItem.size,
+            }}
+          >
+            {items[virtualItem.index].name}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Use virtualization when:
+// - Lists > 100 items with complex rendering
+// - Scrollable grids or tables
+// - Infinite scroll feeds`} />
+</QuestionCard>
+
+## State Optimization Patterns
+
+<QuestionCard question="What are common patterns to avoid unnecessary re-renders?" difficulty="hard" tags={["re-renders", "state", "context", "patterns"]}>
+
+<CodeBlock language="tsx" code={`// PATTERN 1: Move state down to the component that needs it
+// ❌ Putting state too high causes siblings to re-render
+function Parent() {
+  const [input, setInput] = useState(''); // causes Form to re-render too
+  return (
+    <>
+      <SearchBar value={input} onChange={setInput} />
+      <ExpensiveForm /> {/* re-renders on every keystroke */}
+    </>
+  );
+}
+
+// ✅ Colocate state where it's used
+function Parent() {
+  return (
+    <>
+      <SearchBar /> {/* owns its own state */}
+      <ExpensiveForm />
+    </>
+  );
+}
+
+// PATTERN 2: Split context to avoid unnecessary consumers re-rendering
+// ❌ One big context — all consumers re-render on any change
+const AppContext = createContext({ theme, user, cart });
+
+// ✅ Split by update frequency
+const ThemeContext = createContext(theme); // changes rarely
+const UserContext = createContext(user);   // changes on login/logout
+const CartContext = createContext(cart);   // changes on cart updates
+
+// PATTERN 3: Derive state at render time instead of storing it
+// ❌ Redundant state — requires synchronization
+const [items, setItems] = useState([...]);
+const [count, setCount] = useState(0); // must remember to update this!
+
+// ✅ Derive from existing state
+const [items, setItems] = useState([...]);
+const count = items.length; // always in sync, no extra state
+
+// PATTERN 4: useReducer for complex state to prevent cascading updates
+const [state, dispatch] = useReducer(reducer, initialState);
+// dispatch({ type: 'ADD_ITEM', payload: item }) — single state update`} />
+
+<InterviewTip>
+When asked about performance, structure your answer as: (1) measure first with React DevTools, (2) fix structural issues (state colocation, context splitting) before adding memoization, (3) add `React.memo` / `useMemo` / `useCallback` where measured, (4) virtualize large lists, (5) code-split heavy routes.
+</InterviewTip>
+</QuestionCard>

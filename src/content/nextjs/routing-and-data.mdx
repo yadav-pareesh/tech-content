@@ -1,0 +1,138 @@
+# Next.js Routing, Data Fetching & Scenarios
+
+<Lead>Learn how the App Router, dynamic routes, middleware, built-in optimizations, and real-world rendering architecture decisions work in Next.js.</Lead>
+
+## App Router vs Pages Router
+
+<QuestionCard question="What is the App Router, and how does it differ from the Pages Router?" difficulty="medium" tags={["App Router", "Pages Router", "routing", "layouts"]}>
+
+| Feature | Pages Router (`pages/`) | App Router (`app/`) |
+|---------|------------------------|---------------------|
+| Default component type | Client Components | React Server Components |
+| Layouts | Manual `_app.tsx` / `getLayout` | Native nested `layout.tsx` (preserves state) |
+| Data fetching | `getServerSideProps`, `getStaticProps` | `async` Server Components + `fetch` |
+| Loading & Error UI | Manual state handling | Built-in `loading.tsx` & `error.tsx` |
+| Streaming | Not supported | Built-in React Suspense streaming |
+
+<CodeBlock language="text" code={`app/
+├── layout.tsx         # Root layout (wraps all pages)
+├── page.tsx           # Route: /
+├── loading.tsx        # Automatic Suspense loading fallback
+├── error.tsx          # Automatic Error Boundary
+└── matches/
+    ├── page.tsx       # Route: /matches
+    └── [id]/
+        └── page.tsx   # Dynamic route: /matches/123`} />
+</QuestionCard>
+
+## File-Based & Dynamic Routes
+
+<QuestionCard question="What are file-based routing and dynamic routes in Next.js?" difficulty="easy" tags={["file-based routing", "dynamic routes", "params"]}>
+
+In Next.js, folders inside `app/` automatically map to URL segments:
+- **Static route:** `app/about/page.tsx` → `/about`
+- **Dynamic route:** `app/matches/[id]/page.tsx` → `/matches/42`
+- **Catch-all route:** `app/docs/[...slug]/page.tsx` → `/docs/a/b/c`
+
+<CodeBlock language="tsx" code={`// app/matches/[id]/page.tsx
+export default async function MatchDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const match = await getMatchById(id);
+
+  return <h1>{match.title}</h1>;
+}`} />
+</QuestionCard>
+
+## Middleware in Next.js
+
+<QuestionCard question="What is middleware in Next.js and when do you use it?" difficulty="medium" tags={["middleware", "auth", "redirects", "edge"]}>
+
+**Middleware** (`middleware.ts` at the project root) runs **before a request is completed** (at the Edge). It lets you inspect, redirect, rewrite, or modify headers/cookies before rendering a route.
+
+**Common use cases:** Authentication guards, geo-based redirects, A/B testing, rate limiting, and adding security headers.
+
+<CodeBlock language="ts" code={`// middleware.ts
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+
+export function middleware(request: NextRequest) {
+  const token = request.cookies.get('access_token');
+
+  if (!token && request.nextUrl.pathname.startsWith('/dashboard')) {
+    return NextResponse.redirect(new URL('/login', request.url));
+  }
+
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: ['/dashboard/:path*'], // only run on matching routes
+};`} />
+</QuestionCard>
+
+## Data Fetching in Next.js
+
+<QuestionCard question="How does data fetching work in Next.js?" difficulty="medium" tags={["data fetching", "Server Components", "Server Actions"]}>
+
+In the App Router:
+1. **Server Components:** Fetch directly inside `async` components using `fetch()` or database clients. Next.js automatically deduplicates identical `GET` requests during a render pass.
+2. **Parallel Fetching:** Use `Promise.all([getMatch(), getStandings()])` to avoid request waterfalls.
+3. **Mutations:** Use **Server Actions** (`'use server'`) or **Route Handlers** (`app/api/.../route.ts`).
+4. **Client-side live updates:** Use SWR, React Query, or WebSockets inside `'use client'` components.
+</QuestionCard>
+
+## Link vs Anchor Tag & Image Optimization
+
+<QuestionCard question="What is the difference between next/link and a normal <a> tag? How does Next.js optimize images?" difficulty="easy" tags={["next/link", "next/image", "prefetching", "Core Web Vitals"]}>
+
+- **`next/link` (`<Link href="/about">`):**
+  - Performs **client-side navigation** without a full page reload (preserves React state).
+  - Automatically **prefetches** linked routes in the viewport in production for instant transitions.
+  - A normal `<a>` tag triggers a full browser reload and re-downloads assets.
+
+- **`next/image` (`<Image />`):**
+  - Automatically converts images to modern formats (**WebP / AVIF**).
+  - Generates **responsive `srcset`** sizes based on device viewport.
+  - **Lazy-loads** offscreen images by default (use `priority` for above-the-fold LCP images).
+  - Prevents **CLS (Cumulative Layout Shift)** by requiring `width` and `height` (or `fill`).
+
+<CodeBlock language="tsx" code={`import Link from 'next/link';
+import Image from 'next/image';
+
+export function PlayerCard({ player }: { player: Player }) {
+  return (
+    <Link href={\`/players/\${player.id}\`} className="block">
+      <Image
+        src={player.avatarUrl}
+        alt={player.name}
+        width={120}
+        height={120}
+        priority={false}
+      />
+      <span>{player.name}</span>
+    </Link>
+  );
+}`} />
+</QuestionCard>
+
+## Scenario: Live Sports Match Scores
+
+<QuestionCard question="Suppose a sports website displays live match scores. Would you use SSR, CSR, or SSG? Explain your choices." difficulty="hard" tags={["scenario", "SSR", "SSG", "CSR", "hybrid rendering"]}>
+
+In production, you shouldn't pick just one — use a **hybrid approach**:
+
+1. **Static Information (Rules, Venue Details, Historical Archives):**
+   - Use **SSG** (or **ISR** with a long revalidate interval). This content rarely changes, so serving it from a CDN gives instant load times and strong SEO.
+2. **Match Page Shell & Initial Scoreboard (SEO + Fast First Paint):**
+   - Use **SSR** (or **ISR** with short `revalidate: 10` for high-traffic public pages) so search engines and social previews see the current match title, teams, and latest score immediately on load.
+3. **Frequently Changing Live Scores (Ball-by-ball / Minute-by-minute):**
+   - Use **CSR** inside a `'use client'` scoreboard component via **WebSockets (Socket.IO)**, **Server-Sent Events (SSE)**, or short-interval polling so scores update in real time without refreshing the page or overloading SSR servers.
+
+<InterviewTip>
+Always highlight **hybrid rendering**: SSG/ISR for static & SEO shell, CSR (WebSockets/polling) for live real-time ticks. This shows architectural maturity.
+</InterviewTip>
+</QuestionCard>

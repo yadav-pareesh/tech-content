@@ -1,0 +1,256 @@
+# Practical React Scenarios
+
+<Lead>Real-world implementation patterns that interviewers ask to evaluate how you build production React features, manage async state, and handle edge cases.</Lead>
+
+## Pagination
+
+<QuestionCard question="How would you implement pagination in React?" difficulty="medium" tags={["pagination", "API", "state", "URL params"]}>
+
+There are two main types of pagination:
+1. **Offset-based (`page` + `limit`)** — best for numbered page controls and jump-to-page UIs.
+2. **Cursor-based (`cursor` + `limit`)** — best for infinite scroll or real-time feeds where items are frequently inserted.
+
+<CodeBlock language="tsx" code={`function PaginatedUsers() {
+  const [page, setPage] = useState(1);
+  const [data, setData] = useState<{ items: User[]; totalPages: number }>({
+    items: [],
+    totalPages: 1,
+  });
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true);
+
+    fetch(\`/api/users?page=\${page}&limit=10\`, { signal: controller.signal })
+      .then(res => res.json())
+      .then(result => {
+        setData(result);
+        setLoading(false);
+      })
+      .catch(err => {
+        if (err.name !== 'AbortError') setLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [page]);
+
+  return (
+    <div>
+      {loading ? <p>Loading...</p> : data.items.map(u => <div key={u.id}>{u.name}</div>)}
+
+      <div className="flex gap-2 mt-4">
+        <button disabled={page === 1} onClick={() => setPage(p => p - 1)}>Prev</button>
+        <span>Page {page} of {data.totalPages}</span>
+        <button disabled={page === data.totalPages} onClick={() => setPage(p => p + 1)}>Next</button>
+      </div>
+    </div>
+  );
+}`} />
+
+<InterviewTip>
+Mention storing the current page in **URL search params** (`useSearchParams`) so users can bookmark, share, or refresh the page without losing their position.
+</InterviewTip>
+</QuestionCard>
+
+## Search with API Integration
+
+<QuestionCard question="How would you implement search with API integration?" difficulty="medium" tags={["search", "debounce", "AbortController", "race condition"]}>
+
+A production search bar must solve three problems:
+1. **Too many requests** → Debounce input (300–500ms).
+2. **Race conditions** (older slow response overwrites newer fast response) → Cancel stale requests with `AbortController`.
+3. **Empty / short queries** → Skip API calls when query is empty or below minimum length.
+
+<CodeBlock language="tsx" code={`function SearchUsers() {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<User[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (!trimmed) {
+      setResults([]);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(\`/api/users?q=\${encodeURIComponent(trimmed)}\`, {
+          signal: controller.signal,
+        });
+        const data = await res.json();
+        setResults(data);
+      } catch (err: unknown) {
+        if ((err as Error).name !== 'AbortError') {
+          console.error('Search failed:', err);
+        }
+      } finally {
+        setLoading(false);
+      }
+    }, 350); // debounce delay
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort(); // cancel in-flight request if query changes
+    };
+  }, [query]);
+
+  return (
+    <div>
+      <input
+        value={query}
+        onChange={e => setQuery(e.target.value)}
+        placeholder="Search users..."
+      />
+      {loading && <span>Searching...</span>}
+      <ul>{results.map(u => <li key={u.id}>{u.name}</li>)}</ul>
+    </div>
+  );
+}`} />
+</QuestionCard>
+
+## Preventing Unnecessary API Calls
+
+<QuestionCard question="How do you prevent unnecessary API calls in React?" difficulty="medium" tags={["caching", "debounce", "React Query", "AbortController"]}>
+
+1. **Debouncing / Throttling:** Wait for user input to settle before firing requests.
+2. **Client-side Caching (React Query / SWR / RTK Query):** Return cached data immediately and deduplicate identical concurrent requests.
+3. **Conditional Fetching:** Guard `useEffect` so requests don't fire until required params exist.
+4. **AbortController:** Cancel outdated requests when components unmount or dependencies change.
+5. **Memoizing / Stable Dependencies:** Avoid passing new object/function references into `useEffect` dependency arrays.
+</QuestionCard>
+
+## Managing Loading and Error States
+
+<QuestionCard question="How do you manage loading and error states cleanly?" difficulty="easy" tags={["loading", "error handling", "UX", "state"]}>
+
+Use a structured state shape (or a custom `useFetch` hook / TanStack Query) and always handle **loading**, **error**, **empty**, and **success** states explicitly.
+
+<CodeBlock language="tsx" code={`type AsyncState<T> =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'error'; error: string }
+  | { status: 'success'; data: T };
+
+function UserProfile({ userId }: { userId: string }) {
+  const [state, setState] = useState<AsyncState<User>>({ status: 'idle' });
+
+  useEffect(() => {
+    let cancelled = false;
+    setState({ status: 'loading' });
+
+    fetch(\`/api/users/\${userId}\`)
+      .then(res => {
+        if (!res.ok) throw new Error(\`HTTP \${res.status}\`);
+        return res.json();
+      })
+      .then(data => {
+        if (!cancelled) setState({ status: 'success', data });
+      })
+      .catch(err => {
+        if (!cancelled) setState({ status: 'error', error: err.message });
+      });
+
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  if (state.status === 'loading') return <ProfileSkeleton />;
+  if (state.status === 'error') return <ErrorBanner message={state.error} />;
+  if (state.status === 'success') return <ProfileCard user={state.data} />;
+  return null;
+}`} />
+
+<KeyPoint>
+Using a **discriminated union** (`status: 'loading' | 'error' | 'success'`) makes impossible states (like `loading: true` AND `error: 'Failed'` at the same time) impossible.
+</KeyPoint>
+</QuestionCard>
+
+## Authentication in React
+
+<QuestionCard question="How do you handle authentication in a React application?" difficulty="hard" tags={["authentication", "JWT", "protected routes", "interceptors"]}>
+
+1. **Login & Token Storage:** Send credentials to `/api/login`. Store the short-lived **access token** in memory (or React state) and the **refresh token** in an `HttpOnly`, `Secure` cookie (preferred over `localStorage` to protect against XSS).
+2. **Auth Context:** Wrap the app in an `AuthProvider` exposing `user`, `isAuthenticated`, `login()`, and `logout()`.
+3. **Protected Routes:** Create a `<ProtectedRoute />` wrapper that redirects unauthenticated users to `/login`.
+4. **Automatic Token Refresh:** Use an Axios/Fetch interceptor to catch `401 Unauthorized`, call `/api/refresh`, and retry the failed request seamlessly.
+
+<CodeBlock language="tsx" code={`function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+
+  if (loading) return <FullPageSpinner />;
+  if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
+
+  return <>{children}</>;
+}`} />
+</QuestionCard>
+
+## Sharing State Between Unrelated Components
+
+<QuestionCard question="How do you share state between unrelated components?" difficulty="medium" tags={["state sharing", "lifting state", "Context", "Zustand", "Redux"]}>
+
+Choose the simplest tool that fits the scope:
+
+1. **Lift State Up:** Move state to the nearest common parent if components are close in the tree.
+2. **React Context API:** Great for low-frequency global data (theme, auth, locale).
+3. **External State Library (Zustand / Redux Toolkit):** Best for medium/large apps with frequent updates across unrelated components (cart, notifications, filters).
+4. **URL Search Params:** Best for shareable UI state (filters, active tab, pagination, search query).
+5. **Server-State Cache (React Query / RTK Query):** Best for API data shared across multiple components without duplicating fetches.
+</QuestionCard>
+
+## Infinite Scrolling
+
+<QuestionCard question="How would you implement infinite scrolling in React?" difficulty="medium" tags={["infinite scroll", "IntersectionObserver", "pagination", "UX"]}>
+
+Use the browser's **`IntersectionObserver`** API on a sentinel element at the bottom of the list to trigger loading the next page when it enters the viewport.
+
+1. Track `items`, `cursor` (or `page`), `loading`, and `hasMore` (`end-of-list`) state.
+2. Guard against duplicate requests while a fetch is already in flight (`if (loading || !hasMore) return`).
+3. Prefer **cursor-based pagination** over offset pagination for live or frequently changing feeds so newly inserted items don't cause duplicate rows.
+
+<CodeBlock language="tsx" code={`function InfiniteFeed() {
+  const [items, setItems] = useState<Post[]>([]);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  const loadMore = useCallback(async () => {
+    if (loading || !hasMore) return;
+    setLoading(true);
+    try {
+      const res = await fetch(\`/api/feed?cursor=\${cursor ?? ''}\`);
+      const data = await res.json();
+      setItems(prev => [...prev, ...data.items]);
+      setCursor(data.nextCursor);
+      setHasMore(Boolean(data.nextCursor));
+    } finally {
+      setLoading(false);
+    }
+  }, [cursor, loading, hasMore]);
+
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) loadMore();
+    }, { rootMargin: '200px' }); // prefetch slightly before reaching bottom
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [loadMore]);
+
+  return (
+    <div>
+      {items.map(item => <PostCard key={item.id} post={item} />)}
+      <div ref={sentinelRef} className="h-4" />
+      {loading && <p>Loading more...</p>}
+      {!hasMore && <p>You have reached the end.</p>}
+    </div>
+  );
+}`} />
+</QuestionCard>

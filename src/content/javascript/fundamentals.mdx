@@ -1,0 +1,407 @@
+# JavaScript Fundamentals
+
+<Lead>Core JavaScript concepts that form the foundation of every frontend interview. Master these before moving to advanced topics.</Lead>
+
+<Callout type="important" title="Interview Focus">
+These fundamentals are tested in virtually every JavaScript interview. Understanding *why* they work, not just *how*, sets you apart.
+</Callout>
+
+## Variables: var, let, and const
+
+<QuestionCard question="What are the differences between var, let, and const?" difficulty="easy" tags={["variables", "scope", "hoisting"]}>
+
+JavaScript has three ways to declare variables, each with distinct scoping rules.
+
+| Feature | `var` | `let` | `const` |
+|---------|-------|-------|---------|
+| Scope | Function | Block | Block |
+| Hoisting | Yes (undefined) | Yes (TDZ) | Yes (TDZ) |
+| Re-declare | Yes | No | No |
+| Re-assign | Yes | Yes | No |
+
+<CodeBlock language="javascript" code={`// var — function-scoped, hoisted as undefined
+function example() {
+  console.log(x); // undefined (hoisted)
+  var x = 10;
+  if (true) {
+    var x = 20; // same variable!
+    console.log(x); // 20
+  }
+  console.log(x); // 20 — var leaks out of if block
+}
+
+// let — block-scoped, temporal dead zone
+function example2() {
+  // console.log(y); // ReferenceError: Cannot access 'y' before initialization
+  let y = 10;
+  if (true) {
+    let y = 20; // different variable
+    console.log(y); // 20
+  }
+  console.log(y); // 10 — block-scoped
+}
+
+// const — block-scoped, must be initialized
+const PI = 3.14;
+// PI = 3.15; // TypeError: Assignment to constant variable
+
+// const with objects — the binding is constant, not the value
+const obj = { name: 'Alice' };
+obj.name = 'Bob'; // ✓ allowed — mutating the object
+// obj = {}; // ✗ TypeError — reassigning the binding`} />
+
+<InterviewTip>
+When asked about `const`, emphasize that `const` prevents *rebinding*, not *mutation*. Objects and arrays declared with `const` can still be mutated.
+</InterviewTip>
+</QuestionCard>
+
+## Hoisting
+
+<QuestionCard question="What is hoisting in JavaScript?" difficulty="medium" tags={["hoisting", "var", "function declarations"]}>
+
+Hoisting is JavaScript's behavior of moving declarations to the top of their scope during the compilation phase before code execution.
+
+**What gets hoisted:**
+- `var` declarations (initialized to `undefined`)
+- Function declarations (fully hoisted — name AND body)
+- `let` and `const` declarations (hoisted but not initialized — Temporal Dead Zone)
+
+<CodeBlock language="javascript" code={`// Function declarations are fully hoisted
+greet(); // ✓ Works! "Hello"
+function greet() {
+  console.log("Hello");
+}
+
+// Function expressions are NOT fully hoisted
+sayHi(); // TypeError: sayHi is not a function
+var sayHi = function() {
+  console.log("Hi");
+};
+// (var sayHi is hoisted as undefined, then called — TypeError)
+
+// Class declarations — hoisted but not initialized (like let/const)
+// const p = new Person(); // ReferenceError
+class Person {}
+const p = new Person(); // ✓ works`} />
+
+<Callout type="note" title="Temporal Dead Zone (TDZ)">
+`let` and `const` are hoisted to the top of their block scope but are **not initialized**. Accessing them before their declaration throws a `ReferenceError`. The period between the start of the scope and the declaration is called the TDZ.
+</Callout>
+</QuestionCard>
+
+## Type Coercion and Equality
+
+<QuestionCard question="Explain == vs === and type coercion" difficulty="medium" tags={["equality", "coercion", "types"]}>
+
+JavaScript has two equality operators with fundamentally different behavior.
+
+**`==` (loose equality):** Performs type coercion before comparison.  
+**`===` (strict equality):** No coercion — values must have the same type AND value.
+
+<CodeBlock language="javascript" code={`// Loose equality coercion rules
+console.log(1 == "1");     // true (string coerced to number)
+console.log(0 == false);   // true (false coerced to 0)
+console.log(null == undefined); // true (special rule)
+console.log(null == 0);    // false (null only == undefined)
+console.log([] == false);  // true ([] → "" → 0, false → 0)
+console.log("" == false);  // true (both coerce to 0)
+
+// Strict equality — no surprises
+console.log(1 === "1");    // false
+console.log(0 === false);  // false
+console.log(null === undefined); // false
+
+// The famous interview question
+console.log([] == ![]);    // true 🤯
+// [] == false → "" == false → 0 == 0 → true`} />
+
+<CommonMistake>
+Avoid `==` in production code. The coercion rules are complex and lead to subtle bugs. Always use `===` unless you have a specific reason for loose comparison.
+</CommonMistake>
+</QuestionCard>
+
+## Data Types
+
+<QuestionCard question="What are JavaScript's primitive types and how does typeof work?" difficulty="easy" tags={["types", "typeof", "primitives"]}>
+
+JavaScript has **7 primitive types** and **1 object type**.
+
+| Type | typeof result | Example |
+|------|--------------|---------|
+| `string` | `"string"` | `"hello"` |
+| `number` | `"number"` | `42`, `NaN`, `Infinity` |
+| `bigint` | `"bigint"` | `9007199254740991n` |
+| `boolean` | `"boolean"` | `true`, `false` |
+| `undefined` | `"undefined"` | `undefined` |
+| `null` | `"object"` ⚠️ | `null` |
+| `symbol` | `"symbol"` | `Symbol('id')` |
+| Object | `"object"` | `{}`, `[]`, `null` |
+| Function | `"function"` | `function(){}` |
+
+<CodeBlock language="javascript" code={`// typeof quirks to know
+typeof null === "object"; // true — historical bug in JS
+typeof undefined === "undefined"; // true
+typeof [] === "object"; // true — arrays are objects
+typeof function(){} === "function"; // special case
+
+// Proper null check
+value === null; // only way to check for null
+
+// Better type checking
+Array.isArray([]);         // true
+Object.prototype.toString.call(null); // "[object Null]"
+Object.prototype.toString.call([]); // "[object Array]"
+
+// NaN is unique — it's not equal to itself
+NaN === NaN; // false
+Number.isNaN(NaN); // true (use this, not global isNaN)`} />
+</QuestionCard>
+
+## Prototype Chain
+
+<QuestionCard question="How does the prototype chain work in JavaScript?" difficulty="hard" tags={["prototype", "inheritance", "OOP"]}>
+
+Every JavaScript object has an internal link to another object called its **prototype**. When you access a property, JavaScript walks up the chain until it finds it or reaches `null`.
+
+<MermaidDiagram chart={`graph TD
+  A["instance object"] -->|__proto__| B["Constructor.prototype"]
+  B -->|__proto__| C["Object.prototype"]
+  C -->|__proto__| D["null"]
+  B --> E["method()"]
+  C --> F["toString(), hasOwnProperty()"]`} />
+
+<CodeBlock language="javascript" code={`// Prototype chain in action
+function Animal(name) {
+  this.name = name;
+}
+Animal.prototype.speak = function() {
+  return \`\${this.name} makes a sound.\`;
+};
+
+function Dog(name) {
+  Animal.call(this, name); // call parent constructor
+}
+Dog.prototype = Object.create(Animal.prototype);
+Dog.prototype.constructor = Dog;
+Dog.prototype.bark = function() {
+  return \`\${this.name} barks!\`;
+};
+
+const rex = new Dog('Rex');
+rex.bark();  // "Rex barks!" — found on Dog.prototype
+rex.speak(); // "Rex makes a sound." — found on Animal.prototype
+rex.toString(); // "[object Object]" — found on Object.prototype
+
+// Checking the chain
+Object.getPrototypeOf(rex) === Dog.prototype; // true
+rex instanceof Dog;    // true
+rex instanceof Animal; // true
+
+// ES6 class syntax (syntactic sugar over the same prototype system)
+class ModernDog extends Animal {
+  bark() { return \`\${this.name} barks!\`; }
+}`} />
+
+<KeyPoint>
+The prototype chain is the mechanism behind inheritance in JavaScript. ES6 classes are **syntactic sugar** — under the hood, they use the same prototype chain.
+</KeyPoint>
+</QuestionCard>
+
+## Truthiness and Falsy Values
+
+<QuestionCard question="What are falsy values in JavaScript?" difficulty="easy" tags={["truthiness", "conditionals"]}>
+
+A **falsy** value is a value that is considered `false` in a boolean context. There are exactly **8 falsy values** in JavaScript.
+
+<CodeBlock language="javascript" code={`// All falsy values
+if (false) {}
+if (0) {}          // zero
+if (-0) {}         // negative zero
+if (0n) {}         // BigInt zero
+if ("") {}         // empty string
+if ('') {}         // empty string (single quotes)
+if (\`\`) {}       // empty template literal
+if (null) {}
+if (undefined) {}
+if (NaN) {}
+
+// Everything else is truthy — including:
+if ([]) {}         // empty array — TRUTHY!
+if ({}) {}         // empty object — TRUTHY!
+if ("0") {}        // string "0" — TRUTHY!
+if ("false") {}    // string "false" — TRUTHY!
+
+// Practical use
+const name = user.name || 'Anonymous'; // default if falsy
+const count = data?.count ?? 0;        // nullish coalescing (only null/undefined)`} />
+</QuestionCard>
+
+## Array Methods: map, filter, and reduce
+
+<QuestionCard question="What is the difference between map(), filter(), and reduce()?" difficulty="easy" tags={["array methods", "map", "filter", "reduce", "functional"]}>
+
+All three are higher-order array methods that do **not** mutate the original array (they return new values).
+
+| Method | Purpose | Return Value | Array Length |
+|--------|---------|-------------|--------------|
+| `map()` | Transform each element | New array | Same as original |
+| `filter()` | Keep elements matching condition | New array | ≤ original |
+| `reduce()` | Accumulate into a single value | Any value (number, object, array) | Single value |
+
+<CodeBlock language="javascript" code={`const numbers = [1, 2, 3, 4, 5];
+
+// map() — 1-to-1 transformation
+const doubled = numbers.map(n => n * 2);
+// [2, 4, 6, 8, 10]
+
+// filter() — subset based on predicate
+const evens = numbers.filter(n => n % 2 === 0);
+// [2, 4]
+
+// reduce() — fold into a single value (sum, object, grouped map, etc.)
+const sum = numbers.reduce((acc, curr) => acc + curr, 0);
+// 15
+
+// Practical reduce(): group items by a property
+const users = [
+  { name: 'Alice', role: 'admin' },
+  { name: 'Bob', role: 'user' },
+  { name: 'Charlie', role: 'admin' },
+];
+
+const byRole = users.reduce((acc, user) => {
+  acc[user.role] = acc[user.role] || [];
+  acc[user.role].push(user.name);
+  return acc;
+}, {});
+// { admin: ['Alice', 'Charlie'], user: ['Bob'] }`} />
+
+<InterviewTip>
+Always pass an **initial value** (second argument) to `reduce()`. Without it, `reduce()` uses the first element as the initial accumulator and throws a `TypeError` on empty arrays.
+</InterviewTip>
+</QuestionCard>
+
+## Spread and Rest Operators
+
+<QuestionCard question="Explain the spread and rest operators (...)" difficulty="easy" tags={["spread", "rest", "ES6", "syntax"]}>
+
+Both use the `...` syntax, but their meaning depends on **where** they are used:
+- **Spread (`...`)** expands an iterable or object into individual elements/properties.
+- **Rest (`...`)** collects multiple elements/arguments into a single array or object.
+
+<CodeBlock language="javascript" code={`// SPREAD — expands values
+const arr1 = [1, 2];
+const arr2 = [...arr1, 3, 4]; // [1, 2, 3, 4]
+
+const defaults = { theme: 'dark', lang: 'en' };
+const userPrefs = { ...defaults, theme: 'light' }; // { theme: 'light', lang: 'en' }
+
+const nums = [10, 50, 20];
+Math.max(...nums); // 50 (spreads array into function arguments)
+
+// REST — collects remaining values
+function sumAll(first, ...rest) {
+  console.log('First:', first); // 1
+  return rest.reduce((a, b) => a + b, first);
+}
+sumAll(1, 2, 3, 4); // 10
+
+// Rest in destructuring
+const [head, ...tail] = [10, 20, 30, 40];
+// head = 10, tail = [20, 30, 40]
+
+const { password, ...safeUser } = { id: 1, name: 'Alice', password: 'secret' };
+// safeUser = { id: 1, name: 'Alice' }`} />
+</QuestionCard>
+
+## Shallow Copy vs Deep Copy
+
+<QuestionCard question="What is the difference between shallow copy and deep copy?" difficulty="medium" tags={["shallow copy", "deep copy", "structuredClone", "immutability"]}>
+
+- **Shallow copy** duplicates only the **top-level** properties. Nested objects/arrays still share the same memory reference.
+- **Deep copy** recursively duplicates **all levels**, so mutating a nested property in the copy does not affect the original.
+
+<CodeBlock language="javascript" code={`const original = { name: 'Alice', address: { city: 'Delhi' } };
+
+// Shallow copy ({ ...obj } or Object.assign)
+const shallow = { ...original };
+shallow.name = 'Bob';             // ✓ does not affect original.name
+shallow.address.city = 'Mumbai';  // ⚠️ mutates original.address.city too!
+
+// Deep copy 1: structuredClone() (modern native API — handles Dates, Maps, Sets, circular refs)
+const deep1 = structuredClone(original);
+deep1.address.city = 'Bangalore'; // ✓ original.address.city remains unchanged
+
+// Deep copy 2: JSON.parse(JSON.stringify(obj))
+// ⚠️ Limitations: drops functions, undefined, Symbols; turns Dates into strings
+const deep2 = JSON.parse(JSON.stringify(original));
+
+// Deep copy 3: Recursive custom function (for interviews)
+function deepClone(value, seen = new WeakMap()) {
+  if (value === null || typeof value !== 'object') return value;
+  if (seen.has(value)) return seen.get(value); // handle circular references
+
+  const clone = Array.isArray(value) ? [] : {};
+  seen.set(value, clone);
+
+  for (const key of Object.keys(value)) {
+    clone[key] = deepClone(value[key], seen);
+  }
+  return clone;
+}`} />
+
+<CommonMistake>
+Assuming `{ ...obj }` or `Array.prototype.slice()` creates a full independent copy. For nested state in React or Redux, shallow copies of nested objects still cause accidental mutations.
+</CommonMistake>
+</QuestionCard>
+
+## Debouncing and Throttling
+
+<QuestionCard question="What are debouncing and throttling? Implement a debounce function." difficulty="medium" tags={["debounce", "throttle", "performance", "closures", "coding practice"]}>
+
+Both limit how often a function executes in response to high-frequency events (typing, scrolling, resizing).
+
+- **Debouncing:** Delays execution until **N ms have passed without any new calls**. Ideal for search inputs and form validation.
+- **Throttling:** Guarantees execution **at most once every N ms**. Ideal for scroll listeners, resize events, and button spam prevention.
+
+<CodeBlock language="javascript" code={`// Debounce implementation (frequently asked in live coding!)
+function debounce(fn, delay = 300) {
+  let timerId;
+
+  return function (...args) {
+    clearTimeout(timerId); // reset timer on every call
+    timerId = setTimeout(() => {
+      fn.apply(this, args); // preserve 'this' and arguments
+    }, delay);
+  };
+}
+
+// Usage: Search input
+const handleSearch = debounce((query) => {
+  console.log('Fetching results for:', query);
+}, 400);
+
+// Throttle implementation
+function throttle(fn, limit = 300) {
+  let inThrottle = false;
+
+  return function (...args) {
+    if (!inThrottle) {
+      fn.apply(this, args);
+      inThrottle = true;
+      setTimeout(() => {
+        inThrottle = false;
+      }, limit);
+    }
+  };
+}
+
+// Usage: Scroll handler
+window.addEventListener('scroll', throttle(() => {
+  console.log('Scroll position:', window.scrollY);
+}, 200));`} />
+
+<KeyPoint>
+**Debounce** = "Wait until the user stops." **Throttle** = "Run at a steady pace while the user keeps going."
+</KeyPoint>
+</QuestionCard>

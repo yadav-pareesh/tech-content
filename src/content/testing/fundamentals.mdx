@@ -1,0 +1,62 @@
+# Testing & Quality Assurance
+
+<Lead>Testing ensures your UI behaves reliably as the codebase grows. Understand the testing pyramid, key tools (Jest, React Testing Library, Cypress), and how to explain your testing knowledge honestly.</Lead>
+
+## Testing Levels
+
+<QuestionCard question="What are unit testing, integration testing, and end-to-end (E2E) testing? How do unit and integration tests differ?" difficulty="easy" tags={["unit testing", "integration testing", "E2E", "testing pyramid"]}>
+
+| Type | Scope | Speed | Tools |
+|------|-------|-------|-------|
+| **Unit Testing** | Single function, hook, or isolated component | Fastest | Jest, Vitest |
+| **Integration Testing** | Multiple components/modules working together (e.g., form + validation + mocked API) | Fast | Jest + React Testing Library |
+| **End-to-End (E2E)** | Full user flows in a real browser (login → checkout) | Slowest | Cypress, Playwright |
+
+**Unit vs Integration:**
+- **Unit tests** verify one isolated unit with dependencies mocked (e.g., testing a `formatCurrency()` helper).
+- **Integration tests** verify how units collaborate from a user's perspective (e.g., typing into a search input, mocking `fetch`, and asserting results render).
+
+<InterviewTip>
+As Kent C. Dodds' Testing Trophy suggests: *"Write tests. Not too many. Mostly integration."* Integration tests give the highest confidence per test written for React apps.
+</InterviewTip>
+</QuestionCard>
+
+## Tools: Jest, Cypress & Enzyme
+
+<QuestionCard question="What are Jest, Cypress, and Enzyme?" difficulty="easy" tags={["Jest", "Cypress", "Enzyme", "React Testing Library"]}>
+
+- **Jest:** A widely used JavaScript test runner and assertion/mocking framework. Runs unit and integration tests in Node (using JSDOM for browser-like DOM simulation).
+- **Cypress:** A modern browser-based **End-to-End (E2E)** testing framework that runs directly inside a real browser, provides time-travel debugging, and waits automatically for DOM/network assertions.
+- **Enzyme:** An older React testing utility (created by Airbnb) that allowed shallow rendering and inspecting internal component state/instance. It is largely **deprecated** for modern React (18+) in favor of **React Testing Library (RTL)**, which tests behavior the way users interact with the DOM rather than implementation details.
+</QuestionCard>
+
+## Testing a React Component
+
+<QuestionCard question="How do you test a React component?" difficulty="medium" tags={["React Testing Library", "Jest", "mocking", "userEvent"]}>
+
+Follow the **Arrange → Act → Assert** pattern using React Testing Library: query elements by accessible roles/text (not CSS classes) and simulate real user events.
+
+<CodeBlock language="tsx" code={`import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { Counter } from './Counter';
+
+describe('Counter', () => {
+  it('increments count when button is clicked', async () => {
+    const user = userEvent.setup();
+
+    // Arrange
+    render(<Counter initialCount={0} />);
+
+    // Act
+    const button = screen.getByRole('button', { name: /increment/i });
+    await user.click(button);
+
+    // Assert
+    expect(screen.getByText('Count: 1')).toBeInTheDocument();
+  });
+});`} />
+
+<Callout type="note" title="Being Transparent in Interviews">
+If you haven't used Jest or Cypress professionally in production, be honest: explain the concepts clearly, describe how you would structure tests (unit vs integration vs E2E), and mention manual/QA testing practices you *have* used.
+</Callout>
+</QuestionCard>

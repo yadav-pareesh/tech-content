@@ -1,0 +1,318 @@
+# Strings — Data Structures & Algorithms
+
+<Lead>String problems frequently appear in interviews. Most string problems map to array techniques — sliding window, two pointers, and hash maps for character frequency.</Lead>
+
+## Palindrome Problems
+
+<QuestionCard question="Check if a string is a palindrome" difficulty="easy" tags={["palindrome", "two pointers"]}>
+
+<CodeBlock language="javascript" code={`// Approach 1: Two pointers — O(n) time, O(1) space
+function isPalindrome(s) {
+  // Normalize: lowercase, alphanumeric only
+  s = s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  let left = 0, right = s.length - 1;
+
+  while (left < right) {
+    if (s[left] !== s[right]) return false;
+    left++;
+    right--;
+  }
+  return true;
+}
+
+// Approach 2: Reverse comparison — O(n) time, O(n) space
+function isPalindrome2(s) {
+  const clean = s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  return clean === clean.split('').reverse().join('');
+}
+
+// Longest palindromic substring — expand from center
+function longestPalindrome(s) {
+  let start = 0, maxLen = 1;
+
+  function expand(left, right) {
+    while (left >= 0 && right < s.length && s[left] === s[right]) {
+      if (right - left + 1 > maxLen) {
+        maxLen = right - left + 1;
+        start = left;
+      }
+      left--;
+      right++;
+    }
+  }
+
+  for (let i = 0; i < s.length; i++) {
+    expand(i, i);     // odd length palindromes
+    expand(i, i + 1); // even length palindromes
+  }
+
+  return s.substring(start, start + maxLen);
+}
+
+isPalindrome("A man, a plan, a canal: Panama"); // true
+longestPalindrome("babad"); // "bab" or "aba"
+longestPalindrome("cbbd");  // "bb"`} />
+
+**Time:** O(n) | **Space:** O(1) for two-pointer approach
+</QuestionCard>
+
+## Anagram Problems
+
+<QuestionCard question="Check if two strings are anagrams and find all anagrams in a string" difficulty="medium" tags={["anagram", "character frequency", "sliding window", "hash map"]}>
+
+<CodeBlock language="javascript" code={`// Valid Anagram — O(n) time, O(1) space (26 letters)
+function isAnagram(s, t) {
+  if (s.length !== t.length) return false;
+
+  const count = new Array(26).fill(0);
+  const a = 'a'.charCodeAt(0);
+
+  for (let i = 0; i < s.length; i++) {
+    count[s.charCodeAt(i) - a]++;
+    count[t.charCodeAt(i) - a]--;
+  }
+
+  return count.every(c => c === 0);
+}
+
+// Find All Anagrams in a String — sliding window
+function findAnagrams(s, p) {
+  const result = [];
+  if (s.length < p.length) return result;
+
+  const pCount = new Array(26).fill(0);
+  const wCount = new Array(26).fill(0);
+  const a = 'a'.charCodeAt(0);
+
+  // Initialize window with first p.length characters
+  for (let i = 0; i < p.length; i++) {
+    pCount[p.charCodeAt(i) - a]++;
+    wCount[s.charCodeAt(i) - a]++;
+  }
+
+  if (pCount.join(',') === wCount.join(',')) result.push(0);
+
+  for (let i = p.length; i < s.length; i++) {
+    wCount[s.charCodeAt(i) - a]++;             // add right
+    wCount[s.charCodeAt(i - p.length) - a]--;  // remove left
+
+    if (pCount.join(',') === wCount.join(',')) {
+      result.push(i - p.length + 1);
+    }
+  }
+
+  return result;
+}
+
+isAnagram("anagram", "nagaram"); // true
+isAnagram("rat", "car");         // false
+findAnagrams("cbaebabacd", "abc"); // [0, 6]`} />
+
+**Time:** O(n) | **Space:** O(1) — fixed 26-character alphabet
+</QuestionCard>
+
+## String Manipulation
+
+<QuestionCard question="Reverse words in a string" difficulty="easy" tags={["string", "reverse", "split"]}>
+
+<CodeBlock language="javascript" code={`// Reverse words in a sentence (handle extra spaces)
+function reverseWords(s) {
+  return s.trim().split(/\s+/).reverse().join(' ');
+}
+
+// In-place with two pointers (array of characters)
+function reverseWordsInPlace(chars) {
+  // Step 1: Reverse the entire array
+  reverse(chars, 0, chars.length - 1);
+
+  // Step 2: Reverse each word
+  let start = 0;
+  for (let i = 0; i <= chars.length; i++) {
+    if (i === chars.length || chars[i] === ' ') {
+      reverse(chars, start, i - 1);
+      start = i + 1;
+    }
+  }
+  return chars.join('');
+}
+
+function reverse(arr, left, right) {
+  while (left < right) {
+    [arr[left], arr[right]] = [arr[right], arr[left]];
+    left++; right--;
+  }
+}
+
+reverseWords("  the sky  is blue  "); // "blue is sky the"`} />
+</QuestionCard>
+
+## Pattern Matching
+
+<QuestionCard question="Implement strStr (find needle in haystack)" difficulty="medium" tags={["string matching", "KMP", "sliding window"]}>
+
+<CodeBlock language="javascript" code={`// Naive approach — O(n*m)
+function strStr(haystack, needle) {
+  if (needle.length === 0) return 0;
+  if (haystack.length < needle.length) return -1;
+
+  for (let i = 0; i <= haystack.length - needle.length; i++) {
+    if (haystack.substring(i, i + needle.length) === needle) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+// KMP — O(n+m) time, O(m) space
+function strStrKMP(haystack, needle) {
+  if (!needle) return 0;
+  const lps = buildLPS(needle);
+
+  let i = 0; // haystack pointer
+  let j = 0; // needle pointer
+
+  while (i < haystack.length) {
+    if (haystack[i] === needle[j]) {
+      i++; j++;
+      if (j === needle.length) return i - j;
+    } else if (j > 0) {
+      j = lps[j - 1]; // don't increment i
+    } else {
+      i++;
+    }
+  }
+  return -1;
+}
+
+function buildLPS(pattern) {
+  const lps = new Array(pattern.length).fill(0);
+  let len = 0, i = 1;
+
+  while (i < pattern.length) {
+    if (pattern[i] === pattern[len]) {
+      lps[i++] = ++len;
+    } else if (len > 0) {
+      len = lps[len - 1];
+    } else {
+      lps[i++] = 0;
+    }
+  }
+  return lps;
+}
+
+strStr("hello", "ll");   // 2
+strStr("aaaaa", "bba");  // -1`} />
+
+**Naive:** O(n×m) | **KMP:** O(n+m) — the go-to for large pattern matching
+
+<InterviewTip>
+In an interview, start with the naive approach and state its complexity. Then offer to implement KMP if asked about optimization. Interviewers often just want to see that you know KMP exists and understand its advantage.
+</InterviewTip>
+</QuestionCard>
+
+## Important String Methods Reference
+
+<CodeBlock language="javascript" code={`// JavaScript string methods for interview problems
+const s = "Hello, World!";
+
+// Searching
+s.indexOf('o');           // 4 — first occurrence
+s.lastIndexOf('o');       // 8 — last occurrence
+s.includes('World');      // true
+s.startsWith('Hello');    // true
+s.endsWith('!');          // true
+
+// Extraction
+s.slice(7, 12);          // "World"
+s.substring(7, 12);      // "World"
+s.at(-1);                // "!" — last char (ES2022)
+
+// Transformation
+s.toLowerCase();          // "hello, world!"
+s.toUpperCase();          // "HELLO, WORLD!"
+s.trim();                 // removes leading/trailing whitespace
+s.trimStart();            // removes leading whitespace
+s.trimEnd();              // removes trailing whitespace
+s.replace('World', 'JS'); // "Hello, JS!"
+s.replaceAll('l', 'L');  // "HeLLo, WorLd!"
+s.split(', ');            // ["Hello", "World!"]
+
+// Useful for problems
+'abc'.split('');          // ['a', 'b', 'c']
+[...'abc'];               // ['a', 'b', 'c'] — spread works with unicode
+'a'.charCodeAt(0);        // 97
+String.fromCharCode(97);  // 'a'
+'s'.repeat(3);            // 'sss'
+'5'.padStart(4, '0');     // '0005'`} />
+
+## Coding Practice: String Problems
+
+<QuestionCard question="Reverse a string without using reverse()" difficulty="easy" tags={["reverse", "loop", "two pointers", "coding practice"]}>
+
+<CodeBlock language="javascript" code={`// Approach 1: Backward loop — O(n) time, O(n) space
+function reverseString(str) {
+  let reversed = '';
+  for (let i = str.length - 1; i >= 0; i--) {
+    reversed += str[i];
+  }
+  return reversed;
+}
+
+// Approach 2: Two pointers on character array
+function reverseStringTwoPointers(str) {
+  const chars = [...str]; // handles Unicode surrogate pairs safely
+  let left = 0;
+  let right = chars.length - 1;
+
+  while (left < right) {
+    [chars[left], chars[right]] = [chars[right], chars[left]];
+    left++;
+    right--;
+  }
+  return chars.join('');
+}
+
+reverseString("hello"); // "olleh"`} />
+</QuestionCard>
+
+<QuestionCard question="Find the frequency of each character in a string" difficulty="easy" tags={["frequency", "hash map", "Map", "coding practice"]}>
+
+<CodeBlock language="javascript" code={`// O(n) time, O(k) space (k = unique characters)
+function charFrequency(str) {
+  const freq = {};
+
+  for (const char of str) {
+    freq[char] = (freq[char] || 0) + 1;
+  }
+
+  return freq;
+}
+
+charFrequency("interview");
+// { i: 2, n: 1, t: 1, e: 2, r: 1, v: 1, w: 1 }`} />
+</QuestionCard>
+
+<QuestionCard question="Find the first non-repeating character in a string" difficulty="medium" tags={["first unique", "frequency map", "two pass", "coding practice"]}>
+
+<CodeBlock language="javascript" code={`// Two-pass approach — O(n) time, O(1) / O(k) space
+function firstNonRepeatingChar(str) {
+  const freq = new Map();
+
+  // Pass 1: Count frequency of each character
+  for (const char of str) {
+    freq.set(char, (freq.get(char) || 0) + 1);
+  }
+
+  // Pass 2: Find the first character with count === 1
+  for (const char of str) {
+    if (freq.get(char) === 1) {
+      return char;
+    }
+  }
+
+  return null;
+}
+
+firstNonRepeatingChar("aabbcdd"); // "c"
+firstNonRepeatingChar("aabb");    // null`} />
+</QuestionCard>

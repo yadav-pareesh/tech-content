@@ -1,0 +1,148 @@
+# The Event Loop
+
+<Lead>The event loop is JavaScript's mechanism for handling asynchronous operations in a single-threaded environment. This is one of the deepest and most revealing topics in a JavaScript interview.</Lead>
+
+<Callout type="important" title="Core Concept">
+JavaScript is single-threaded — only one thing runs at a time. The event loop is how it appears to do multiple things at once.
+</Callout>
+
+## How the Event Loop Works
+
+<QuestionCard question="Explain the JavaScript event loop, call stack, and task queues." difficulty="hard" tags={["event loop", "call stack", "microtask", "macrotask"]}>
+
+The JavaScript runtime has several key components:
+
+<MermaidDiagram chart={`graph TD
+  A["JavaScript Code"] -->|"function calls"| B["Call Stack"]
+  B -->|"async ops"| C["Web APIs\n(setTimeout, fetch, DOM)"]
+  C -->|"callbacks"| D["Macrotask Queue\n(Task Queue)"]
+  C -->|"Promise callbacks"| E["Microtask Queue\n(Job Queue)"]
+  D -->|"when stack empty"| B
+  E -->|"checked first"| B
+  style E fill:#6366f1,color:#fff
+  style D fill:#8b5cf6,color:#fff`} />
+
+**Execution Order:**
+1. Execute synchronous code (call stack)
+2. Process **all** microtasks (Promises, queueMicrotask)
+3. Render (if applicable)
+4. Process **one** macrotask (setTimeout, setInterval, I/O)
+5. Repeat from step 2
+
+<CodeBlock language="javascript" code={`console.log('1 - sync');
+
+setTimeout(() => console.log('2 - macrotask'), 0);
+
+Promise.resolve()
+  .then(() => console.log('3 - microtask 1'))
+  .then(() => console.log('4 - microtask 2'));
+
+queueMicrotask(() => console.log('5 - microtask 3'));
+
+console.log('6 - sync');
+
+// Output order:
+// 1 - sync
+// 6 - sync
+// 3 - microtask 1
+// 5 - microtask 3
+// 4 - microtask 2
+// 2 - macrotask`} />
+
+<InterviewTip>
+To answer event loop questions, trace through code and label each line as: sync → microtask (Promise .then) → macrotask (setTimeout). Then determine the order. Practice this until it's automatic.
+</InterviewTip>
+</QuestionCard>
+
+## Microtasks vs Macrotasks
+
+<QuestionCard question="What is the difference between microtasks and macrotasks?" difficulty="hard" tags={["microtask", "macrotask", "Promise", "setTimeout"]}>
+
+| | **Microtasks** | **Macrotasks** |
+|--|---|---|
+| Also called | Job queue | Task queue |
+| Examples | Promise `.then`, `queueMicrotask`, `MutationObserver` | `setTimeout`, `setInterval`, `setImmediate`, I/O, UI events |
+| Priority | High — ALL run before next macrotask | Low — one per event loop tick |
+| Runs | After current task, before rendering | After microtask queue is empty |
+
+<CodeBlock language="javascript" code={`// Deep dive example
+console.log('start');
+
+// Macrotask 1
+setTimeout(() => {
+  console.log('timeout 1');
+  Promise.resolve().then(() => console.log('timeout 1 - micro'));
+}, 0);
+
+// Macrotask 2
+setTimeout(() => {
+  console.log('timeout 2');
+}, 0);
+
+// Microtask
+Promise.resolve()
+  .then(() => {
+    console.log('micro 1');
+    // Adding more microtasks from within a microtask
+    Promise.resolve().then(() => console.log('micro 2'));
+  })
+  .then(() => console.log('micro 3'));
+
+console.log('end');
+
+// Output:
+// start
+// end
+// micro 1       ← microtask queue processed
+// micro 2       ← microtask added in microtask, runs before macrotask
+// micro 3       ← chained .then
+// timeout 1     ← first macrotask
+// timeout 1 - micro ← microtask from within macrotask, runs before next macrotask
+// timeout 2     ← second macrotask`} />
+
+<Callout type="warning" title="Infinite Microtask Loop">
+If you keep adding microtasks from within microtasks (e.g., recursive `Promise.resolve().then()`), you can starve the macrotask queue and block the UI. The browser will never render.
+</Callout>
+</QuestionCard>
+
+## Practical Event Loop Tracing
+
+<QuestionCard question="What does this code output? (Classic async interview question)" difficulty="hard" tags={["tracing", "async", "output"]}>
+
+<CodeBlock language="javascript" code={`async function fetchData() {
+  console.log('fetchData start');         // 2
+  const result = await Promise.resolve('data');
+  console.log('fetchData after await');   // 5 (microtask)
+  return result;
+}
+
+console.log('script start');              // 1
+
+setTimeout(() => {
+  console.log('setTimeout');             // 7 (macrotask)
+}, 0);
+
+fetchData().then(() => {
+  console.log('fetchData .then');        // 6 (microtask)
+});
+
+Promise.resolve()
+  .then(() => console.log('promise 1')) // 4 (microtask)
+  .then(() => console.log('promise 2')); // 8? No: 6 is next micro...
+
+console.log('script end');              // 3
+
+// Actual output:
+// script start
+// fetchData start
+// script end
+// promise 1       ← microtask 1
+// fetchData after await ← microtask 2 (await resumes as microtask)
+// fetchData .then ← microtask 3 (chained from fetchData resolution)
+// promise 2       ← microtask 4 (chained from promise 1)
+// setTimeout      ← macrotask`} />
+
+<KeyPoint>
+`await` on a resolved Promise queues the continuation as a **microtask**, not synchronous code. This is why `async/await` and `Promise.then()` behave the same way under the hood.
+</KeyPoint>
+</QuestionCard>

@@ -1,0 +1,60 @@
+# Web Performance & Core Web Vitals
+
+<Lead>Beyond React re-renders, frontend engineers must understand browser loading metrics, Core Web Vitals, bundle optimization, and asset delivery.</Lead>
+
+## Lighthouse & Core Web Vitals
+
+<QuestionCard question="What is Lighthouse, and what are Core Web Vitals (LCP, INP, CLS)?" difficulty="medium" tags={["Lighthouse", "Core Web Vitals", "LCP", "INP", "CLS"]}>
+
+**Lighthouse** is an automated open-source auditing tool (built into Chrome DevTools) that scores a web app across Performance, Accessibility, Best Practices, and SEO.
+
+**Core Web Vitals** are Google's three key user-experience metrics:
+
+| Metric | Stands For | Measures | Good Target | Common Causes of Poor Score |
+|--------|-----------|----------|-------------|-----------------------------|
+| **LCP** | Largest Contentful Paint | Loading speed of main above-the-fold content | ≤ 2.5s | Large unoptimized hero images, slow server TTFB, render-blocking JS/CSS |
+| **INP** | Interaction to Next Paint | Responsiveness to user clicks/taps/keystrokes | ≤ 200ms | Heavy JS main-thread tasks, huge synchronous state updates |
+| **CLS** | Cumulative Layout Shift | Visual stability (unexpected layout jumps) | ≤ 0.1 | Images/ads without `width`/`height`, dynamically injected banners above content |
+
+<InterviewTip>
+Notice that **INP** replaced FID (First Input Delay) as a Core Web Vital because INP measures *all* interactions throughout the page lifecycle, not just the first one.
+</InterviewTip>
+</QuestionCard>
+
+## Image Optimization
+
+<QuestionCard question="How do you optimize images for web performance?" difficulty="easy" tags={["images", "WebP", "AVIF", "lazy loading", "CLS"]}>
+
+1. **Modern Formats:** Serve **WebP** or **AVIF** instead of PNG/JPEG (25–50% smaller file sizes).
+2. **Responsive Sizing (`srcset` / `sizes`):** Don't serve a 2000px desktop hero image to a 375px mobile screen.
+3. **Lazy Loading:** Add `loading="lazy"` on below-the-fold images so they only download as the user scrolls near them.
+4. **Preload LCP Hero Image:** Use `fetchPriority="high"` (or Next.js `<Image priority />`) on the main above-the-fold image.
+5. **Prevent Layout Shift:** Always specify explicit `width` and `height` (or CSS `aspect-ratio`).
+6. **CDN Delivery:** Serve images from an image CDN (Cloudinary, Imgix, Vercel) for automatic compression and edge caching.
+</QuestionCard>
+
+## Bundle Size, Tree Shaking & Initial Load
+
+<QuestionCard question="How do you reduce JavaScript bundle size, what is tree shaking, and how do you improve initial page loading?" difficulty="medium" tags={["bundle size", "tree shaking", "code splitting", "initial load"]}>
+
+**Tree Shaking:**
+A build-time dead-code elimination technique used by bundlers (Vite/Rollup, Webpack) on **ES Modules (`import`/`export`)**. Unused exports from libraries are stripped out of the final production bundle.
+
+<CodeBlock language="ts" code={`// ✅ Tree-shakeable named import (bundles only what you use)
+import { debounce } from 'lodash-es';
+
+// ❌ Non-tree-shakeable default import (pulls entire library)
+import _ from 'lodash';`} />
+
+**How to Reduce JS Bundle Size:**
+- **Route-based Code Splitting:** Use `React.lazy()` + `Suspense` or Next.js dynamic imports.
+- **Analyze the Bundle:** Use `rollup-plugin-visualizer` or `@next/bundle-analyzer` to spot oversized dependencies.
+- **Replace Heavy Libraries:** Swap `moment.js` for `date-fns` or native `Intl`, and import specific icons rather than entire icon packs.
+- **Keep Server-Only Logic on the Server:** Use React Server Components so data-fetching/formatting libraries never ship to the client.
+
+**How to Improve Initial Page Loading:**
+- Pre-render HTML via **SSR / SSG** for instant First Contentful Paint.
+- Enable **Gzip / Brotli** compression and HTTP/2 + CDN caching.
+- Defer non-critical third-party scripts (`async` / `defer`).
+- Inline critical CSS and preload key fonts (`font-display: swap`).
+</QuestionCard>

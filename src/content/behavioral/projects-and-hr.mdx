@@ -1,0 +1,62 @@
+# Project-Based & Behavioral Prep
+
+<Lead>Frameworks for explaining your projects, real-time Socket.IO architecture, debugging stories, and HR collaboration questions clearly and concisely.</Lead>
+
+## Explaining Your Project Architecture
+
+<QuestionCard question="How should you explain your project architecture (e.g., CMS, Task Management, or Chatly) in an interview?" difficulty="medium" tags={["architecture", "projects", "Socket.IO", "STAR"]}>
+
+Structure every project walkthrough in **4 clear steps (2–3 minutes total)**:
+1. **Context & Goal:** What problem the app solves and who uses it.
+2. **Tech Stack & Structure:** Frontend framework (React/Next.js), state management (Redux Toolkit / Context / Zustand), styling, and folder organization (feature-based modules, reusable UI components, API service layer).
+3. **Your Specific Ownership:** Explicitly state what *you* built (e.g., *"I implemented the dynamic form builder, role-based protected routes, and API error interceptors"*).
+4. **Key Technical Decisions & Trade-offs:** Why you chose a specific pattern, how you optimized performance, and what you would improve if rebuilding it today.
+
+**Real-Time Chat Architecture (Socket.IO Example):**
+- **Connection Lifecycle:** Establish socket connection after JWT auth, join room IDs (`socket.emit('join_room', roomId)`), and clean up listeners in `useEffect` return.
+- **UI & State Updates:** Append incoming messages optimistically for the sender, deduplicate by temporary/server ID, and scroll to bottom smoothly.
+- **Improvements on Rebuild:** Add message virtualization for long chat histories, offline message queuing, and React Query / Zustand for cleaner separation of REST history vs. live socket events.
+</QuestionCard>
+
+## Challenging Bugs & Performance Stories
+
+<QuestionCard question="How do you answer: 'What was the most challenging bug you encountered, and how did you solve it?'" difficulty="medium" tags={["debugging", "STAR method", "problem solving"]}>
+
+Use the **STAR** format:
+- **Situation:** Briefly describe the feature and symptom (e.g., *"Users saw stale search results or duplicate socket messages on room switch"*).
+- **Task:** Why it mattered (broken UX, memory leak, or data inconsistency).
+- **Action:** How you diagnosed it (Chrome DevTools Network/Profiler, reproducing reliably) and fixed it (e.g., adding `AbortController` cleanup / removing duplicate socket listeners on unmount).
+- **Result:** Measurable outcome (*"Eliminated race conditions and reduced unnecessary API calls by ~40%"*).
+</QuestionCard>
+
+## HR, Communication & Collaboration
+
+<QuestionCard question="How should you approach HR, teamwork, and collaboration questions?" difficulty="easy" tags={["HR", "communication", "collaboration", "behavioral"]}>
+
+1. **Tell me about yourself:** Keep it to 60–90 seconds: Current role & core stack (React, Next.js, JS/TS) → 1–2 impactful projects → Why you're excited about this role.
+2. **Working with Designers & Backend Developers:** Emphasize proactive communication — reviewing Figma specs early for edge cases (loading, empty, error states, mobile breakpoints) and aligning on API contracts/schemas (JSON shapes, status codes, pagination) before integration.
+3. **Handling Disagreements:** Focus on **shared user/product goals** and objective trade-offs (performance, maintainability, delivery speed) rather than ego. Mention prototyping or benchmarking when opinions differ.
+4. **Strengths & Weaknesses:** Pair a real strength (e.g., clean component architecture, debugging) with an honest growth area you are actively improving (e.g., *"I haven't written production Cypress E2E tests yet, so I've been studying RTL and testing patterns"*).
+5. **Logistics (Relocation, Salary, Notice Period):** Answer directly, positively, and transparently.
+</QuestionCard>
+
+## Handling Production Incidents
+
+<QuestionCard question="Tell me about a production issue you resolved. How do you structure incident answers?" difficulty="medium" tags={["production issue", "incident", "root cause", "STAR"]}>
+
+Walk through a real incident using a structured **6-step engineering flow**:
+1. **Impact:** Who was affected and what broke (e.g., checkout button unresponsive, auth loop, or broken mobile layout).
+2. **Detection:** How it was caught (monitoring/Sentry alert, QA, or user report).
+3. **Immediate Mitigation:** What you did first to stop the bleeding (rollback, feature flag toggle, or hotfix).
+4. **Root Cause:** Why it happened (e.g., missing null-check on an API field, unhandled `401` refresh loop, or stale build cache).
+5. **Permanent Fix:** The long-term code and validation fix deployed.
+6. **Prevention / Learning:** What guardrails you added afterward (TypeScript strictness, unit/integration test, Error Boundary, or API contract check).
+</QuestionCard>
+
+## Interview Answering Strategy & Checklist
+
+<Callout type="tip" title="How to Deliver High-Impact Answers">
+- **Start simple, then add depth:** Give a crisp 2-sentence core answer first, then offer implementation details or trade-offs if the interviewer asks a follow-up.
+- **Think aloud on coding problems:** Explain your brute-force or initial approach, clarify edge cases (empty inputs, duplicates), and then optimize.
+- **Be honest, never bluff:** If you don't know a specific tool or API, clearly state what you *do* know and explain how you would investigate or learn it.
+</Callout>

@@ -1,0 +1,133 @@
+# API Integration, Networking & Auth
+
+<Lead>Frontend applications live and die by how cleanly they communicate with backend APIs, handle errors, manage tokens, and keep the UI responsive.</Lead>
+
+## HTTP Methods & REST vs GraphQL
+
+<QuestionCard question="Explain HTTP methods (GET, POST, PUT, PATCH, DELETE) and REST vs GraphQL." difficulty="easy" tags={["HTTP", "REST", "GraphQL", "API"]}>
+
+| Method | Purpose | Idempotent? | Request Body |
+|--------|---------|------------|--------------|
+| `GET` | Retrieve resource(s) | Yes | No |
+| `POST` | Create a new resource | No | Yes |
+| `PUT` | Replace an entire resource | Yes | Yes |
+| `PATCH` | Partially update a resource | No* | Yes |
+| `DELETE` | Remove a resource | Yes | Optional |
+
+**REST vs GraphQL:**
+- **REST:** Multiple endpoints (`/users`, `/users/1/posts`). Easy HTTP caching, standard status codes, simple to start. Can suffer from **over-fetching** (getting unused fields) or **under-fetching** (needing multiple round trips).
+- **GraphQL:** Single endpoint (`/graphql`) where the client specifies the exact shape of data needed. Prevents over/under-fetching and provides strongly typed schemas, at the cost of more complex caching and server setup.
+</QuestionCard>
+
+## Axios vs Fetch
+
+<QuestionCard question="What is the difference between Axios and Fetch?" difficulty="easy" tags={["Axios", "Fetch", "HTTP client", "interceptors"]}>
+
+| Feature | Fetch API | Axios |
+|---------|-----------|-------|
+| Availability | Native browser & Node API | Third-party library |
+| JSON parsing | Manual (`await res.json()`) | Automatic (`res.data`) |
+| HTTP Error handling | Only rejects on network error (must check `res.ok`) | Automatically rejects on 4xx/5xx status codes |
+| Interceptors | Manual wrapper needed | Built-in request/response interceptors |
+| Request cancellation | `AbortController` | `AbortController` |
+| Timeouts | Manual via `AbortSignal.timeout()` | Built-in `timeout` option |
+
+<CodeBlock language="ts" code={`// Fetch requires checking res.ok explicitly
+const res = await fetch('/api/matches');
+if (!res.ok) {
+  throw new Error(\`Request failed with status \${res.status}\`);
+}
+const data = await res.json();
+
+// Axios instance with base URL and auth interceptor
+import axios from 'axios';
+
+export const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL,
+  timeout: 10000,
+});
+
+api.interceptors.request.use((config) => {
+  const token = getAccessToken();
+  if (token) config.headers.Authorization = \`Bearer \${token}\`;
+  return config;
+});`} />
+</QuestionCard>
+
+## Error Handling, Caching & Request Cancellation
+
+<QuestionCard question="How do you handle API errors, caching, and cancelling API requests?" difficulty="medium" tags={["error handling", "caching", "AbortController", "React Query"]}>
+
+1. **Handling API Errors:**
+   - Centralize error parsing (network error vs 4xx validation error vs 5xx server error).
+   - Use response interceptors for global errors (e.g., `401` → refresh token, `403` → permission toast, `500` → retry/fallback UI).
+   - Display user-friendly messages and retry buttons rather than crashing the UI.
+
+2. **API Caching:**
+   - Use **TanStack Query (React Query)**, **SWR**, or **RTK Query** for `stale-while-revalidate` caching, automatic background refetching, and request deduplication.
+   - Leverage HTTP cache headers (`Cache-Control`, `ETag`) on `GET` endpoints.
+
+3. **Cancelling Requests (`AbortController`):**
+   - Crucial on component unmount or rapid search input to prevent memory leaks and race conditions.
+
+<CodeBlock language="tsx" code={`useEffect(() => {
+  const controller = new AbortController();
+
+  async function load() {
+    try {
+      const res = await fetch('/api/athletes', { signal: controller.signal });
+      const data = await res.json();
+      setAthletes(data);
+    } catch (err: unknown) {
+      if ((err as Error).name === 'AbortError') return; // expected cancellation
+      setError('Failed to load athletes');
+    }
+  }
+
+  load();
+  return () => controller.abort();
+}, []);`} />
+</QuestionCard>
+
+## JWT Authentication, Refresh Tokens & CORS
+
+<QuestionCard question="Explain JWT authentication, access vs refresh tokens, and CORS." difficulty="hard" tags={["JWT", "access token", "refresh token", "CORS", "security"]}>
+
+- **JWT (JSON Web Token):** A signed, self-contained token (`header.payload.signature`) sent in the `Authorization: Bearer <token>` header to authenticate stateless API requests.
+- **Access Token vs Refresh Token:**
+  - **Access Token:** Short-lived (e.g., 15 minutes). Sent with every API request. Stored in memory (or short-lived cookie) to minimize XSS exposure.
+  - **Refresh Token:** Long-lived (e.g., 7 days). Stored in an `HttpOnly`, `Secure`, `SameSite` cookie (inaccessible to JavaScript). When the access token expires (`401`), an interceptor silently calls `/auth/refresh` to obtain a new access token and retries the original request.
+- **CORS (Cross-Origin Resource Sharing):** A browser security mechanism that blocks requests to a different origin (scheme + domain + port) unless the server explicitly responds with `Access-Control-Allow-Origin` (and handles `OPTIONS` preflight requests for custom headers or non-simple methods).
+
+<Callout type="note" title="CORS is a Browser Policy">
+CORS is enforced by the **browser**, not by the server or tools like Postman/cURL. Fixing CORS requires configuring headers on the **backend server** (or using a Next.js/Vite proxy in development).
+</Callout>
+</QuestionCard>
+
+## Practical Scenario: 5-Second Slow API
+
+<QuestionCard question="An API takes 5 seconds to return data. How would you improve the user experience?" difficulty="medium" tags={["UX", "skeleton", "caching", "optimistic UI", "streaming"]}>
+
+1. **Immediate Visual Feedback:** Show **skeleton loaders** matching the layout (instead of a blank screen or generic spinner) so perceived wait time feels shorter.
+2. **Stale-While-Revalidate Caching:** Serve cached data immediately (via React Query / SWR / ISR) while fetching fresh data in the background.
+3. **Progressive / Streaming Rendering:** Load critical above-the-fold data first (fast endpoint) and stream/lazy-load secondary heavy widgets independently with React `<Suspense>`.
+4. **Prefetching:** Prefetch data on hover or route intent (`queryClient.prefetchQuery`) before the user clicks.
+5. **Optimistic Updates (for mutations):** Update the UI immediately on user action and roll back only if the API fails.
+6. **Backend Collaboration:** Suggest pagination, field filtering, compression (gzip/brotli), or database indexing if the 5s latency is avoidable.
+</QuestionCard>
+
+## Essential HTTP Status Codes
+
+<QuestionCard question="Explain key HTTP status codes: 401 vs 403, 404, and 500." difficulty="easy" tags={["HTTP status", "401", "403", "404", "500", "security"]}>
+
+| Status Code | Meaning | Frontend Handling |
+|-------------|---------|-------------------|
+| **401 Unauthorized** | Missing, invalid, or expired **authentication** credentials | Attempt silent token refresh; if refresh fails, clear session and redirect to `/login` |
+| **403 Forbidden** | User is **authenticated**, but lacks **authorization/permission** for the resource | Show an "Access Denied" state; do not retry or log the user out |
+| **404 Not Found** | The requested API endpoint or resource does not exist | Render a clean empty/not-found state |
+| **500 Internal Server Error** | Unexpected failure on the backend server | Show a user-friendly fallback with a retry option; never expose raw server stack traces |
+
+<InterviewTip>
+Always distinguish **401 (Authentication — "Who are you?")** from **403 (Authorization — "I know who you are, but you aren't allowed here.")** cleanly.
+</InterviewTip>
+</QuestionCard>
